@@ -102,6 +102,19 @@ type KeycloakClientSpec struct {
 	// +optional
 	// +kubebuilder:example={"https://example.com/*", "/my/relative/path/*"}
 	RedirectUris []string `json:"redirectUris,omitempty"`
+
+	// AuthenticationFlowBindingOverrides overrides realm authentication flow bindings.
+	// +nullable
+	// +optional
+	AuthenticationFlowBindingOverrides AuthenticationFlowBindingOverrides `json:"authenticationFlowBindingOverrides,omitempty"`
+}
+
+type AuthenticationFlowBindingOverrides struct {
+	// +optional
+	Browser string `json:"browser,omitempty"`
+
+	// +optional
+	DirectGrant string `json:"direct_grant,omitempty"`
 }
 
 type ServiceAccount struct {

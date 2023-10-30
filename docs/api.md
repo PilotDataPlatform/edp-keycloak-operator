@@ -3662,6 +3662,13 @@ KeycloakClientSpec defines the desired state of KeycloakClient.
         </td>
         <td>false</td>
       </tr><tr>
+        <td><b><a href="#keycloakclientspecauthenticationflowbindingoverrides">authenticationFlowBindingOverrides</a></b></td>
+        <td>object</td>
+        <td>
+          AuthenticationFlowBindingOverrides overrides realm authentication flow bindings.<br/>
+        </td>
+        <td>false</td>
+      </tr><tr>
         <td><b>clientRoles</b></td>
         <td>[]string</td>
         <td>
@@ -3766,6 +3773,40 @@ KeycloakClientSpec defines the desired state of KeycloakClient.
         <td>string</td>
         <td>
           WebUrl is a client web url.<br/>
+        </td>
+        <td>false</td>
+      </tr></tbody>
+</table>
+
+
+### KeycloakClient.spec.authenticationFlowBindingOverrides
+<sup><sup>[↩ Parent](#keycloakclientspec)</sup></sup>
+
+
+
+AuthenticationFlowBindingOverrides overrides realm authentication flow bindings.
+
+<table>
+    <thead>
+        <tr>
+            <th>Name</th>
+            <th>Type</th>
+            <th>Description</th>
+            <th>Required</th>
+        </tr>
+    </thead>
+    <tbody><tr>
+        <td><b>browser</b></td>
+        <td>string</td>
+        <td>
+          <br/>
+        </td>
+        <td>false</td>
+      </tr><tr>
+        <td><b>direct_grant</b></td>
+        <td>string</td>
+        <td>
+          <br/>
         </td>
         <td>false</td>
       </tr></tbody>

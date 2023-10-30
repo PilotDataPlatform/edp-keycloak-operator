@@ -66,21 +66,22 @@ func ConvertSpecToRealm(spec *keycloakApi.KeycloakRealmSpec) *Realm {
 }
 
 type Client struct {
-	ID                      string
-	ClientId                string
-	ClientSecret            string `json:"-"`
-	RealmName               string
-	Roles                   []string
-	RealmRole               IncludedRealmRole // what this for ? does not used anywhere
-	Public                  bool
-	DirectAccess            bool
-	WebUrl                  string
-	Protocol                string
-	Attributes              map[string]string
-	AdvancedProtocolMappers bool
-	ServiceAccountEnabled   bool
-	FrontChannelLogout      bool
-	RedirectUris            []string
+	ID                                 string
+	ClientId                           string
+	ClientSecret                       string `json:"-"`
+	RealmName                          string
+	Roles                              []string
+	RealmRole                          IncludedRealmRole // what this for ? does not used anywhere
+	Public                             bool
+	DirectAccess                       bool
+	WebUrl                             string
+	Protocol                           string
+	Attributes                         map[string]string
+	AdvancedProtocolMappers            bool
+	ServiceAccountEnabled              bool
+	FrontChannelLogout                 bool
+	RedirectUris                       []string
+	AuthenticationFlowBindingOverrides keycloakApi.AuthenticationFlowBindingOverrides
 }
 
 type PrimaryRealmRole struct {
@@ -100,19 +101,20 @@ type IncludedRealmRole struct {
 
 func ConvertSpecToClient(spec *keycloakApi.KeycloakClientSpec, clientSecret, realmName string) *Client {
 	return &Client{
-		RealmName:               realmName,
-		ClientId:                spec.ClientId,
-		ClientSecret:            clientSecret,
-		Roles:                   spec.ClientRoles,
-		Public:                  spec.Public,
-		DirectAccess:            spec.DirectAccess,
-		WebUrl:                  spec.WebUrl,
-		Protocol:                getValueOrDefault(spec.Protocol),
-		Attributes:              spec.Attributes,
-		AdvancedProtocolMappers: spec.AdvancedProtocolMappers,
-		ServiceAccountEnabled:   spec.ServiceAccount != nil && spec.ServiceAccount.Enabled,
-		FrontChannelLogout:      spec.FrontChannelLogout,
-		RedirectUris:            spec.RedirectUris,
+		RealmName:                          realmName,
+		ClientId:                           spec.ClientId,
+		ClientSecret:                       clientSecret,
+		Roles:                              spec.ClientRoles,
+		Public:                             spec.Public,
+		DirectAccess:                       spec.DirectAccess,
+		WebUrl:                             spec.WebUrl,
+		Protocol:                           getValueOrDefault(spec.Protocol),
+		Attributes:                         spec.Attributes,
+		AdvancedProtocolMappers:            spec.AdvancedProtocolMappers,
+		ServiceAccountEnabled:              spec.ServiceAccount != nil && spec.ServiceAccount.Enabled,
+		FrontChannelLogout:                 spec.FrontChannelLogout,
+		RedirectUris:                       spec.RedirectUris,
+		AuthenticationFlowBindingOverrides: spec.AuthenticationFlowBindingOverrides,
 	}
 }
 
