@@ -81,7 +81,7 @@ type Client struct {
 	ServiceAccountEnabled              bool
 	FrontChannelLogout                 bool
 	RedirectUris                       []string
-	AuthenticationFlowBindingOverrides keycloakApi.AuthenticationFlowBindingOverrides
+	AuthenticationFlowBindingOverrides map[string]string
 }
 
 type PrimaryRealmRole struct {

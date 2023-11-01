@@ -106,15 +106,7 @@ type KeycloakClientSpec struct {
 	// AuthenticationFlowBindingOverrides overrides realm authentication flow bindings.
 	// +nullable
 	// +optional
-	AuthenticationFlowBindingOverrides AuthenticationFlowBindingOverrides `json:"authenticationFlowBindingOverrides,omitempty"`
-}
-
-type AuthenticationFlowBindingOverrides struct {
-	// +optional
-	Browser string `json:"browser,omitempty"`
-
-	// +optional
-	DirectGrant string `json:"direct_grant,omitempty"`
+	AuthenticationFlowBindingOverrides map[string]string `json:"authenticationFlowBindingOverrides,omitempty"`
 }
 
 type ServiceAccount struct {
