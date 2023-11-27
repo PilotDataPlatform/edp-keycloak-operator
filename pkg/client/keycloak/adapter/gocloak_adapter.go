@@ -568,13 +568,14 @@ func getGclCln(client *dto.Client) gocloak.Client {
 	protocolMappers := getProtocolMappers(client.AdvancedProtocolMappers)
 
 	cl := gocloak.Client{
-		ClientID:                  &client.ClientId,
-		Secret:                    &client.ClientSecret,
-		PublicClient:              &client.Public,
-		DirectAccessGrantsEnabled: &client.DirectAccess,
-		RootURL:                   &client.WebUrl,
-		Protocol:                  &client.Protocol,
-		Attributes:                &client.Attributes,
+		ClientID:                           &client.ClientId,
+		Secret:                             &client.ClientSecret,
+		PublicClient:                       &client.Public,
+		DirectAccessGrantsEnabled:          &client.DirectAccess,
+		RootURL:                            &client.WebUrl,
+		Protocol:                           &client.Protocol,
+		Attributes:                         &client.Attributes,
+		AuthenticationFlowBindingOverrides: &client.AuthenticationFlowBindingOverrides,
 		RedirectURIs: &[]string{
 			client.WebUrl + "/*",
 		},

@@ -47,6 +47,13 @@ spec:
                 description: Attributes is a map of client attributes.
                 nullable: true
                 type: object
+              authenticationFlowBindingOverrides:
+                additionalProperties:
+                  type: string
+                description: AuthenticationFlowBindingOverrides overrides realm authentication
+                  flow bindings.
+                nullable: true
+                type: object
               clientId:
                 description: ClientId is a unique keycloak client ID referenced in
                   URI and tokens.

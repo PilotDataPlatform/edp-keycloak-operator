@@ -3662,6 +3662,13 @@ KeycloakClientSpec defines the desired state of KeycloakClient.
         </td>
         <td>false</td>
       </tr><tr>
+        <td><b>authenticationFlowBindingOverrides</b></td>
+        <td>map[string]string</td>
+        <td>
+          AuthenticationFlowBindingOverrides overrides realm authentication flow bindings.<br/>
+        </td>
+        <td>false</td>
+      </tr><tr>
         <td><b>clientRoles</b></td>
         <td>[]string</td>
         <td>
