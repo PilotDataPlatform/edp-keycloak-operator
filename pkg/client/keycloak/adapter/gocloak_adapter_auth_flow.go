@@ -103,7 +103,7 @@ func (a GoCloakAdapter) DeleteAuthFlow(realmName string, flow *KeycloakAuthFlow)
 func (a GoCloakAdapter) SyncAuthFlow(realmName string, flow *KeycloakAuthFlow) (string, error) {
 	id, err := a.syncBaseAuthFlow(realmName, flow)
 	if err != nil {
-		return "", errors.Wrap(err, "unable to sync base auth flow")
+		return id, errors.Wrap(err, "unable to sync base auth flow")
 	}
 
 	sort.Sort(orderByPriority(flow.AuthenticationExecutions))
