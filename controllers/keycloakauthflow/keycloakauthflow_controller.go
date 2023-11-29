@@ -168,6 +168,9 @@ func (r *Reconcile) tryReconcile(ctx context.Context, instance *keycloakApi.Keyc
 	} else {
 		log.Info("Adding UUID from Keycloak to KeycloakAuthFlow spec: " + id)
 		instance.Spec.UUID = id
+		if err := r.client.Update(ctx, instance); err != nil {
+			return fmt.Errorf("Failed to update KeycloakAuthFlow UUID in spec: %w", err)
+		}
 	}
 
 	return nil
