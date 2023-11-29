@@ -116,6 +116,10 @@ spec:
               topLevel:
                 description: TopLevel is true if this is root auth flow.
                 type: boolean
+              uuid:
+                description: UUID for authentication flow.
+                nullable: true
+                type: string
             required:
             - alias
             - builtIn

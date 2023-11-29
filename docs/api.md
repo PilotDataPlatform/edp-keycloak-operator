@@ -3397,6 +3397,13 @@ KeycloakAuthFlowSpec defines the desired state of KeycloakAuthFlow.
           RealmRef is reference to Realm custom resource.<br/>
         </td>
         <td>false</td>
+      </tr><tr>
+        <td><b>uuid</b></td>
+        <td>string</td>
+        <td>
+          UUID for authentication flow.<br/>
+        </td>
+        <td>false</td>
       </tr></tbody>
 </table>
 
