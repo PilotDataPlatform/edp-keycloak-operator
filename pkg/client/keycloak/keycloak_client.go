@@ -46,7 +46,7 @@ type KIdentityProvider interface {
 }
 
 type KAuthFlow interface {
-	SyncAuthFlow(realmName string, flow *adapter.KeycloakAuthFlow) error
+	SyncAuthFlow(realmName string, flow *adapter.KeycloakAuthFlow) (string, error)
 	DeleteAuthFlow(realmName string, flow *adapter.KeycloakAuthFlow) error
 	SetRealmBrowserFlow(realmName string, flowAlias string) error
 }
