@@ -148,7 +148,7 @@ func (e *ExecFlowTestSuite) TestSyncAuthFlow() {
 		httpmock.NewStringResponder(200, ""),
 	)
 
-	err := e.adapter.SyncAuthFlow(e.realmName, &flow)
+	_, err := e.adapter.SyncAuthFlow(e.realmName, &flow)
 	assert.NoError(e.T(), err)
 }
 

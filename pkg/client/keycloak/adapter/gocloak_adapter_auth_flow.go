@@ -100,10 +100,10 @@ func (a GoCloakAdapter) DeleteAuthFlow(realmName string, flow *KeycloakAuthFlow)
 	return nil
 }
 
-func (a GoCloakAdapter) SyncAuthFlow(realmName string, flow *KeycloakAuthFlow) error {
+func (a GoCloakAdapter) SyncAuthFlow(realmName string, flow *KeycloakAuthFlow) (string, error) {
 	id, err := a.syncBaseAuthFlow(realmName, flow)
 	if err != nil {
-		return errors.Wrap(err, "unable to sync base auth flow")
+		return id, errors.Wrap(err, "unable to sync base auth flow")
 	}
 
 	sort.Sort(orderByPriority(flow.AuthenticationExecutions))
@@ -115,15 +115,15 @@ func (a GoCloakAdapter) SyncAuthFlow(realmName string, flow *KeycloakAuthFlow) e
 
 		e.ParentFlow = id
 		if err := a.addAuthFlowExecution(realmName, &e); err != nil {
-			return errors.Wrap(err, "unable to add auth execution")
+			return id, errors.Wrap(err, "unable to add auth execution")
 		}
 	}
 
 	if err := a.adjustChildFlowsPriority(realmName, flow); err != nil {
-		return errors.Wrap(err, "unable to adjust child flow priority")
+		return id, errors.Wrap(err, "unable to adjust child flow priority")
 	}
 
-	return nil
+	return id, nil
 }
 
 func (a GoCloakAdapter) adjustChildFlowsPriority(realmName string, flow *KeycloakAuthFlow) error {
@@ -337,6 +337,7 @@ func (a GoCloakAdapter) createAuthFlow(realmName string, flow *KeycloakAuthFlow)
 		return "", errors.Wrap(err, "unable to create auth flow in realm")
 	}
 
+	// Get UUID of created flow from Keycloak response
 	id, err = getIDFromResponseLocation(resp.RawResponse)
 	if err != nil {
 		return "", errors.Wrap(err, "unable to get flow id")

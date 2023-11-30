@@ -75,7 +75,7 @@ func TestNewReconcile(t *testing.T) {
 	kClient.On("SyncAuthFlow", realm.Spec.RealmName, &adapter.KeycloakAuthFlow{
 		Alias:                    flow.Spec.Alias,
 		AuthenticationExecutions: []adapter.AuthenticationExecution{},
-	}).Return(nil)
+	}).Return("", nil)
 
 	h.On("TryToDelete", testifymock.Anything, testifymock.Anything, testifymock.Anything, testifymock.Anything).
 		Return(false, nil)
@@ -146,7 +146,7 @@ func TestReconcile_Reconcile_Failure(t *testing.T) {
 	kClient.On("SyncAuthFlow", realm.Spec.RealmName, &adapter.KeycloakAuthFlow{
 		Alias:                    flow.Spec.Alias,
 		AuthenticationExecutions: []adapter.AuthenticationExecution{},
-	}).Return(mockErr)
+	}).Return("", mockErr)
 
 	r := Reconcile{
 		helper: h,
@@ -213,7 +213,7 @@ func TestReconcile_Reconcile_FailureToGetParentRealm(t *testing.T) {
 	kClient.On("SyncAuthFlow", realm.Spec.RealmName, &adapter.KeycloakAuthFlow{
 		Alias:                    flow.Spec.Alias,
 		AuthenticationExecutions: []adapter.AuthenticationExecution{},
-	}).Return(mockErr)
+	}).Return("", mockErr)
 
 	r := Reconcile{
 		helper: h,

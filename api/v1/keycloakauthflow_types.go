@@ -20,6 +20,11 @@ type KeycloakAuthFlowSpec struct {
 	// Alias is display name for authentication flow.
 	Alias string `json:"alias"`
 
+	// UUID for authentication flow.
+	// +nullable
+	// +optional
+	UUID string `json:"uuid"`
+
 	// Description is description for authentication flow.
 	// +optional
 	Description string `json:"description,omitempty"`

@@ -212,8 +212,12 @@ func (m *Mock) DeleteAuthFlow(realmName string, flow *KeycloakAuthFlow) error {
 	return m.Called(realmName, flow).Error(0)
 }
 
-func (m *Mock) SyncAuthFlow(realmName string, flow *KeycloakAuthFlow) error {
-	return m.Called(realmName, flow).Error(0)
+func (m *Mock) SyncAuthFlow(realmName string, flow *KeycloakAuthFlow) (string, error) {
+	called := m.Called(realmName, flow)
+	if err := called.Error(1); err != nil {
+		return "", err
+	}
+	return called.String(0), nil
 }
 
 func (m *Mock) SetRealmBrowserFlow(realmName string, flowAlias string) error {

@@ -131,6 +131,7 @@ func (r *Reconcile) Reconcile(ctx context.Context, request reconcile.Request) (r
 }
 
 func (r *Reconcile) tryReconcile(ctx context.Context, instance *keycloakApi.KeycloakAuthFlow) error {
+	log := ctrl.LoggerFrom(ctx)
 	if err := r.helper.SetRealmOwnerRef(ctx, instance); err != nil {
 		return fmt.Errorf("unable to set realm owner ref: %w", err)
 	}
@@ -161,8 +162,15 @@ func (r *Reconcile) tryReconcile(ctx context.Context, instance *keycloakApi.Keyc
 		return nil
 	}
 
-	if err := kClient.SyncAuthFlow(gocloak.PString(realm.Realm), keycloakAuthFlow); err != nil {
+	log.Info("Syncing KeycloakAuthFlow with Keycloak")
+	if id, err := kClient.SyncAuthFlow(gocloak.PString(realm.Realm), keycloakAuthFlow); err != nil {
 		return fmt.Errorf("unable to sync auth flow: %w", err)
+	} else {
+		log.Info("Adding UUID from Keycloak to KeycloakAuthFlow spec: " + id)
+		instance.Spec.UUID = id
+		if err := r.client.Update(ctx, instance); err != nil {
+			return fmt.Errorf("Failed to update KeycloakAuthFlow UUID in spec: %w", err)
+		}
 	}
 
 	return nil
