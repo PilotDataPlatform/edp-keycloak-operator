@@ -179,13 +179,14 @@ func (a GoCloakAdapter) syncBaseAuthFlow(realmName string, flow *KeycloakAuthFlo
 		}
 	}
 
-	if err := a.validateChildFlowsCreated(realmName, flow); err != nil {
-		return "", errors.Wrap(err, "child flows validation failed")
-	}
+	// if err := a.validateChildFlowsCreated(realmName, flow); err != nil {
+	// 	return "", errors.Wrap(err, "child flows validation failed")
+	// }
 
 	return authFlowID, nil
 }
 
+//lint:ignore U1000 Child flow validation is disabled
 func (a GoCloakAdapter) validateChildFlowsCreated(realmName string, flow *KeycloakAuthFlow) error {
 	childFlows := 0
 
