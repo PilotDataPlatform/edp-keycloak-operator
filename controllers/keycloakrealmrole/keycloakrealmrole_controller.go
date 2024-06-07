@@ -20,8 +20,8 @@ import (
 	keycloakApi "github.com/epam/edp-keycloak-operator/api/v1"
 	"github.com/epam/edp-keycloak-operator/controllers/helper"
 	"github.com/epam/edp-keycloak-operator/pkg/client/keycloak"
-	"github.com/epam/edp-keycloak-operator/pkg/client/keycloak/adapter"
 	"github.com/epam/edp-keycloak-operator/pkg/client/keycloak/dto"
+	"github.com/epam/edp-keycloak-operator/pkg/objectmeta"
 )
 
 const keyCloakRealmRoleOperatorFinalizerName = "keycloak.realmrole.operator.finalizer.name"
@@ -125,14 +125,6 @@ func (r *ReconcileKeycloakRealmRole) Reconcile(ctx context.Context, request reco
 			}, nil
 		}
 
-		if adapter.IsErrDuplicated(err) {
-			instance.Status.Value = keycloakApi.StatusDuplicated
-
-			log.Info("Role is duplicated", "name", instance.Name)
-
-			return
-		}
-
 		instance.Status.Value = err.Error()
 		result.RequeueAfter = r.helper.SetFailureCount(&instance)
 
@@ -175,7 +167,12 @@ func (r *ReconcileKeycloakRealmRole) tryReconcile(ctx context.Context, keycloakR
 	if _, err := r.helper.TryToDelete(
 		ctx,
 		keycloakRealmRole,
-		makeTerminator(gocloak.PString(realm.Realm), keycloakRealmRole.Spec.Name, kClient),
+		makeTerminator(
+			gocloak.PString(realm.Realm),
+			keycloakRealmRole.Spec.Name,
+			kClient,
+			objectmeta.PreserveResourcesOnDeletion(keycloakRealmRole),
+		),
 		keyCloakRealmRoleOperatorFinalizerName,
 	); err != nil {
 		return "", errors.Wrap(err, "unable to tryToDelete realm role")
@@ -195,7 +192,7 @@ func (r *ReconcileKeycloakRealmRole) putRole(
 
 	role := dto.ConvertSpecToRole(keycloakRealmRole)
 
-	if err := kClient.SyncRealmRole(realmName, role); err != nil {
+	if err := kClient.SyncRealmRole(ctx, realmName, role); err != nil {
 		return "", errors.Wrap(err, "unable to sync realm role CR")
 	}
 

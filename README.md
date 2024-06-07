@@ -5,7 +5,7 @@
 | :heavy_exclamation_mark: Please refer to [EDP documentation](https://epam.github.io/edp-install/) to get the main concepts and guidelines. |
 | --- |
 
-Get acquainted with the Keycloak Operator, the installation process, the local development, and the architecture scheme.
+Get acquainted with the Keycloak Operator, the installation process, the quick start, and the local development guidelines.
 
 ## Overview
 
@@ -33,8 +33,8 @@ To install the Keycloak Operator, follow the steps below:
      ```bash
      helm search repo epamedp/keycloak-operator -l
      NAME                           CHART VERSION   APP VERSION     DESCRIPTION
-     epamedp/keycloak-operator      1.17.0          1.17.0          A Helm chart for EDP Keycloak Operator
-     epamedp/keycloak-operator      1.16.0          1.16.0          A Helm chart for EDP Keycloak Operator
+     epamedp/keycloak-operator      1.21.0          1.21.0          A Helm chart for EDP Keycloak Operator
+     epamedp/keycloak-operator      1.20.0          1.20.0          A Helm chart for EDP Keycloak Operator
      ```
 
     _**NOTE:** It is highly recommended to use the latest stable version._
@@ -89,7 +89,9 @@ To install the Keycloak Operator, follow the steps below:
     name: keycloakrealm-sample
    spec:
     realmName: realm-sample
-    keycloakOwner: keycloak-sample   # the name of `kind: Keycloak`
+    keycloakRef:
+      name: keycloak-sample
+      kind: Keycloak
     ```
 
     ```yaml
@@ -99,16 +101,35 @@ To install the Keycloak Operator, follow the steps below:
       name: argocd-admins
     spec:
       name: ArgoCDAdmins
-      realm: keycloakrealm-sample   # the name of `kind: KeycloakRealm`
+      realmRef:
+        name: keycloakrealm-sample
+        kind: KeycloakRealm
     ```
 
-    Inspect [available custom resource](./docs/arch.md) and [CR templates folder](./deploy-templates/_crd_examples/) for more examples
+    Inspect [available custom resource](./docs/arch.md) and [CR templates folder](./deploy-templates/_crd_examples/) for more examples.
+
+#### Preventing the operator from deleting resources
+To prevent the operator from deleting resources from Keycloak, add the `edp.epam.com/preserve-resources-on-deletion: "true"` annotation to the resource.
+
+   ```yaml
+   apiVersion: v1.edp.epam.com/v1
+   kind: KeycloakRealm
+   metadata:
+    name: keycloakrealm-sample
+    annotations:
+      edp.epam.com/preserve-resources-on-deletion: "true"
+   spec:
+    realmName: realm-sample
+    keycloakRef:
+       name: keycloak-sample
+       kind: Keycloak
+   ```
 
 ## Local Development
 
 To develop the operator, first set up a local environment, and refer to the [Local Development](https://epam.github.io/edp-install/developer-guide/local-development/) page.
 
-Development versions are also available from the [snapshot helm chart repository](https://epam.github.io/edp-helm-charts/snapshot/) page.
+Development versions are also available from the [snapshot Helm Chart repository](https://epam.github.io/edp-helm-charts/snapshot/) page.
 
 ### Related Articles
 

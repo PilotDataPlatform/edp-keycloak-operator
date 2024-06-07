@@ -103,6 +103,7 @@ type KeycloakAuthFlowStatus struct {
 // +kubebuilder:object:root=true
 // +kubebuilder:subresource:status
 // +kubebuilder:storageversion
+// +kubebuilder:printcolumn:name="Status",type="string",JSONPath=".status.value",description="Reconcilation status"
 
 // KeycloakAuthFlow is the Schema for the keycloak authentication flow API.
 type KeycloakAuthFlow struct {

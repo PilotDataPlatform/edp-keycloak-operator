@@ -42,6 +42,23 @@ type GoCloakClients interface {
 	GetClientScope(ctx context.Context, token, realm, scopeID string) (*gocloak.ClientScope, error)
 	GetClientsDefaultScopes(ctx context.Context, token, realm, clientID string) ([]*gocloak.ClientScope, error)
 	AddDefaultScopeToClient(ctx context.Context, token, realm, clientID, scopeID string) error
+	GetClientScopes(ctx context.Context, token, realm string) ([]*gocloak.ClientScope, error)
+
+	GetScopes(ctx context.Context, token, realm, idOfClient string, params gocloak.GetScopeParams) ([]*gocloak.ScopeRepresentation, error)
+	CreateScope(ctx context.Context, token, realm, idOfClient string, scope gocloak.ScopeRepresentation) (*gocloak.ScopeRepresentation, error)
+	DeleteScope(ctx context.Context, token, realm, idOfClient string, scopeID string) error
+
+	GetPolicies(ctx context.Context, token, realm, idOfClient string, params gocloak.GetPolicyParams) ([]*gocloak.PolicyRepresentation, error)
+	CreatePolicy(ctx context.Context, token, realm, idOfClient string, policy gocloak.PolicyRepresentation) (*gocloak.PolicyRepresentation, error)
+	UpdatePolicy(ctx context.Context, token, realm, idOfClient string, policy gocloak.PolicyRepresentation) error
+	DeletePolicy(ctx context.Context, token, realm, idOfClient, policyID string) error
+
+	GetPermissions(ctx context.Context, token, realm, idOfClient string, params gocloak.GetPermissionParams) ([]*gocloak.PermissionRepresentation, error)
+	CreatePermission(ctx context.Context, token, realm, idOfClient string, permission gocloak.PermissionRepresentation) (*gocloak.PermissionRepresentation, error)
+	UpdatePermission(ctx context.Context, token, realm, idOfClient string, permission gocloak.PermissionRepresentation) error
+	DeletePermission(ctx context.Context, token, realm, idOfClient, permissionID string) error
+
+	GetResources(ctx context.Context, token, realm, idOfClient string, params gocloak.GetResourceParams) ([]*gocloak.ResourceRepresentation, error)
 }
 
 type GoCloakUsers interface {
@@ -65,12 +82,13 @@ type GoCloakClientRoles interface {
 type GoCloakRealmRoles interface {
 	CreateRealmRole(ctx context.Context, token, realm string, role gocloak.Role) (string, error)
 	GetRealmRole(ctx context.Context, token, realm, roleName string) (*gocloak.Role, error)
+	GetRealmRoles(ctx context.Context, token, realm string, params gocloak.GetRoleParams) ([]*gocloak.Role, error)
 	AddRealmRoleToUser(ctx context.Context, token, realm, userID string, roles []gocloak.Role) error
 	UpdateRealmRole(ctx context.Context, token, realm, roleName string, role gocloak.Role) error
 	DeleteRealmRole(ctx context.Context, token, realm, roleName string) error
 	AddRealmRoleComposite(ctx context.Context, token, realm, roleName string, roles []gocloak.Role) error
 	DeleteRealmRoleComposite(ctx context.Context, token, realm, roleName string, roles []gocloak.Role) error
-	GetCompositeRealmRolesByRoleID(ctx context.Context, token, realm, roleID string) ([]*gocloak.Role, error)
+	GetCompositeRolesByRoleID(ctx context.Context, token, realm, roleID string) ([]*gocloak.Role, error)
 	DeleteRealmRoleFromUser(ctx context.Context, token, realm, userID string, roles []gocloak.Role) error
 	AddRealmRoleToGroup(ctx context.Context, token, realm, groupID string, roles []gocloak.Role) error
 	DeleteRealmRoleFromGroup(ctx context.Context, token, realm, groupID string, roles []gocloak.Role) error

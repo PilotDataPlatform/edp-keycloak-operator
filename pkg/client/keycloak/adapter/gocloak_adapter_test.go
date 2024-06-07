@@ -16,11 +16,13 @@ import (
 	"github.com/jarcoal/httpmock"
 	"github.com/pkg/errors"
 	"github.com/stretchr/testify/assert"
+	testifymock "github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
+	ctrl "sigs.k8s.io/controller-runtime"
 
 	keycloakApi "github.com/epam/edp-keycloak-operator/api/v1"
-	"github.com/epam/edp-keycloak-operator/pkg/client/keycloak/api"
+	"github.com/epam/edp-keycloak-operator/pkg/client/keycloak/adapter/mocks"
 	"github.com/epam/edp-keycloak-operator/pkg/client/keycloak/dto"
 	"github.com/epam/edp-keycloak-operator/pkg/client/keycloak/mock"
 	"github.com/epam/edp-keycloak-operator/pkg/fakehttp"
@@ -29,7 +31,7 @@ import (
 type AdapterTestSuite struct {
 	suite.Suite
 	restyClient       *resty.Client
-	goCloakMockClient *MockGoCloakClient
+	goCloakMockClient *mocks.MockGoCloak
 	adapter           *GoCloakAdapter
 	realmName         string
 }
@@ -40,8 +42,8 @@ func (e *AdapterTestSuite) SetupTest() {
 	httpmock.Reset()
 	httpmock.ActivateNonDefault(e.restyClient.GetClient())
 
-	e.goCloakMockClient = new(MockGoCloakClient)
-	e.goCloakMockClient.On("RestyClient").Return(e.restyClient)
+	e.goCloakMockClient = mocks.NewMockGoCloak(e.T())
+	e.goCloakMockClient.On("RestyClient").Return(e.restyClient).Maybe()
 
 	e.adapter = &GoCloakAdapter{
 		client: e.goCloakMockClient,
@@ -78,14 +80,14 @@ func (e *AdapterTestSuite) TestMakeFromServiceAccount() {
 		{
 			name: "should succeed with legacy endpoint",
 			mockServer: fakehttp.NewServerBuilder().
-				AddStringResponder("/auth"+realmsEndpoint, "{}").
+				AddStringResponder(authPath+realmsEndpoint, "{}").
 				BuildAndStart(),
 			wantErr: require.NoError,
 		},
 		{
 			name: "should fail on status bad request",
 			mockServer: fakehttp.NewServerBuilder().
-				AddStringResponderWithCode(http.StatusBadRequest, "/auth"+realmsEndpoint, "{}").
+				AddStringResponderWithCode(http.StatusBadRequest, authPath+realmsEndpoint, "{}").
 				BuildAndStart(),
 			wantErr: func(t require.TestingT, err error, _ ...interface{}) {
 				require.Error(t, err)
@@ -102,8 +104,18 @@ func (e *AdapterTestSuite) TestMakeFromServiceAccount() {
 
 			defer tt.mockServer.Close()
 
-			_, err := MakeFromServiceAccount(context.Background(), tt.mockServer.GetURL(),
-				"k-cl-id", "k-secret", "master", mock.NewLogr(), resty.New())
+			_, err := MakeFromServiceAccount(
+				context.Background(),
+				GoCloakConfig{
+					Url:      tt.mockServer.GetURL(),
+					User:     "k-cl-id",
+					Password: "k-secret",
+				},
+
+				"master",
+				mock.NewLogr(),
+				resty.New(),
+			)
 			tt.wantErr(t, err)
 		})
 	}
@@ -131,7 +143,7 @@ func (e *AdapterTestSuite) TestMake() {
 		{
 			name: "should succeed with legacy endpoint",
 			mockServer: fakehttp.NewServerBuilder().
-				AddStringResponder("/auth"+realmsEndpoint, "{}").
+				AddStringResponder(authPath+realmsEndpoint, "{}").
 				BuildAndStart(),
 			wantErr: require.NoError,
 		},
@@ -146,7 +158,7 @@ func (e *AdapterTestSuite) TestMake() {
 		{
 			name: "should fail with status 400",
 			mockServer: fakehttp.NewServerBuilder().
-				AddStringResponderWithCode(http.StatusBadRequest, "/auth"+realmsEndpoint, "{}").
+				AddStringResponderWithCode(http.StatusBadRequest, authPath+realmsEndpoint, "{}").
 				BuildAndStart(),
 			wantErr: func(t require.TestingT, err error, i ...interface{}) {
 				require.Error(t, err)
@@ -168,14 +180,23 @@ func (e *AdapterTestSuite) TestMake() {
 				defer tt.mockServer.Close()
 			}
 
-			_, err := Make(context.Background(), url, "bar", "baz", mock.NewLogr(), resty.New())
+			_, err := Make(
+				context.Background(),
+				GoCloakConfig{
+					Url:      url,
+					User:     "bar",
+					Password: "baz",
+				},
+				mock.NewLogr(),
+				resty.New(),
+			)
 			tt.wantErr(t, err)
 		})
 	}
 }
 
 func (e *AdapterTestSuite) TestGoCloakAdapter_ExistRealmPositive() {
-	e.goCloakMockClient.On("GetRealm", "token", "realmName").
+	e.goCloakMockClient.On("GetRealm", testifymock.Anything, "token", "realmName").
 		Return(&gocloak.RealmRepresentation{Realm: gocloak.StringP("realm")}, nil)
 
 	realm := dto.Realm{
@@ -202,8 +223,8 @@ func TestGetDefaultRealm(t *testing.T) {
 
 func TestGoCloakAdapter_ExistRealm404(t *testing.T) {
 	// prepare
-	mockClient := new(MockGoCloakClient)
-	mockClient.On("GetRealm", "token", "realmName").
+	mockClient := mocks.NewMockGoCloak(t)
+	mockClient.On("GetRealm", testifymock.Anything, "token", "realmName").
 		Return(nil, errors.New("404"))
 
 	adapter := GoCloakAdapter{
@@ -225,8 +246,8 @@ func TestGoCloakAdapter_ExistRealm404(t *testing.T) {
 
 func TestGoCloakAdapter_ExistRealmError(t *testing.T) {
 	// prepare
-	mockClient := new(MockGoCloakClient)
-	mockClient.On("GetRealm", "token", "realmName").
+	mockClient := mocks.NewMockGoCloak(t)
+	mockClient.On("GetRealm", testifymock.Anything, "token", "realmName").
 		Return(nil, errors.New("error in get realm"))
 
 	adapter := GoCloakAdapter{
@@ -252,7 +273,7 @@ func TestGoCloakAdapter_GetClientProtocolMappers_Failure2(t *testing.T) {
 		ClientId:  "test",
 	}
 	clientID := "321"
-	mockClient := new(MockGoCloakClient)
+	mockClient := mocks.NewMockGoCloak(t)
 	restyClient := resty.New()
 	httpmock.ActivateNonDefault(restyClient.GetClient())
 	mockClient.On("RestyClient").Return(restyClient)
@@ -282,7 +303,7 @@ func TestGoCloakAdapter_GetClientProtocolMappers_Failure(t *testing.T) {
 		ClientId:  "test",
 	}
 	clientID := "321"
-	mockClient := new(MockGoCloakClient)
+	mockClient := mocks.NewMockGoCloak(t)
 	restyClient := resty.New()
 	httpmock.ActivateNonDefault(restyClient.GetClient())
 	mockClient.On("RestyClient").Return(restyClient)
@@ -308,7 +329,7 @@ func TestGoCloakAdapter_GetClientProtocolMappers_Failure(t *testing.T) {
 }
 
 func TestGoCloakAdapter_CreateClient(t *testing.T) {
-	mockClient := new(MockGoCloakClient)
+	mockClient := mocks.NewMockGoCloak(t)
 	logger := mock.NewLogr()
 
 	cl := dto.Client{
@@ -320,20 +341,20 @@ func TestGoCloakAdapter_CreateClient(t *testing.T) {
 		log:    logger,
 	}
 
-	mockClient.On("CreateClient", "", getGclCln(&cl)).Return("id", nil).Once()
+	mockClient.On("CreateClient", testifymock.Anything, "token", "", getGclCln(&cl)).Return("id", nil).Once()
 
 	err := a.CreateClient(context.Background(), &cl)
 	assert.NoError(t, err)
 
 	createErr := errors.New("create-err")
-	mockClient.On("CreateClient", "", getGclCln(&cl)).Return("", createErr).Once()
+	mockClient.On("CreateClient", testifymock.Anything, "token", "", getGclCln(&cl)).Return("", createErr).Once()
 	err = a.CreateClient(context.Background(), &cl)
 
 	assert.ErrorIs(t, err, createErr)
 }
 
 func TestGoCloakAdapter_UpdateClient(t *testing.T) {
-	mockClient := new(MockGoCloakClient)
+	mockClient := mocks.NewMockGoCloak(t)
 	logger := mock.NewLogr()
 
 	cl := dto.Client{}
@@ -343,7 +364,7 @@ func TestGoCloakAdapter_UpdateClient(t *testing.T) {
 		log:    logger,
 	}
 
-	mockClient.On("UpdateClient", a.token.AccessToken, cl.RealmName,
+	mockClient.On("UpdateClient", testifymock.Anything, a.token.AccessToken, cl.RealmName,
 		getGclCln(&cl)).Return(nil).Once()
 
 	err := a.UpdateClient(context.Background(), &cl)
@@ -351,7 +372,7 @@ func TestGoCloakAdapter_UpdateClient(t *testing.T) {
 
 	updErr := errors.New("update-error")
 
-	mockClient.On("UpdateClient", a.token.AccessToken, cl.RealmName,
+	mockClient.On("UpdateClient", testifymock.Anything, a.token.AccessToken, cl.RealmName,
 		getGclCln(&cl)).Return(updErr).Once()
 
 	err = a.UpdateClient(context.Background(), &cl)
@@ -367,11 +388,11 @@ func TestGoCloakAdapter_SyncClientProtocolMapper_Success(t *testing.T) {
 	}
 	clientID := "321"
 
-	mockClient := new(MockGoCloakClient)
+	mockClient := mocks.NewMockGoCloak(t)
 	restyClient := resty.New()
 	httpmock.ActivateNonDefault(restyClient.GetClient())
 	mockClient.On("RestyClient").Return(restyClient)
-	mockClient.On("GetClients", client.RealmName, gocloak.GetClientsParams{
+	mockClient.On("GetClients", testifymock.Anything, "token", client.RealmName, gocloak.GetClientsParams{
 		ClientID: &client.ClientId,
 	}).Return([]*gocloak.Client{
 		{
@@ -425,16 +446,16 @@ func TestGoCloakAdapter_SyncClientProtocolMapper_Success(t *testing.T) {
 	responder, err := httpmock.NewJsonResponder(200, kcMappers)
 	require.NoError(t, err)
 
-	mockClient.On("DeleteClientProtocolMapper", client.RealmName, clientID, *kcMappers[0].ID).
+	mockClient.On("DeleteClientProtocolMapper", testifymock.Anything, "token", client.RealmName, clientID, *kcMappers[0].ID).
 		Return(nil)
 
-	mockClient.On("UpdateClientProtocolMapper", client.RealmName, clientID, *crMappers[0].ID, crMappers[0]).
+	mockClient.On("UpdateClientProtocolMapper", testifymock.Anything, "token", client.RealmName, clientID, *crMappers[0].ID, crMappers[0]).
 		Return(nil)
 
-	mockClient.On("CreateClientProtocolMapper", client.RealmName, clientID, crMappers[1]).
+	mockClient.On("CreateClientProtocolMapper", testifymock.Anything, "token", client.RealmName, clientID, crMappers[1]).
 		Return("", nil)
 
-	mockClient.On("CreateClientProtocolMapper", client.RealmName, clientID,
+	mockClient.On("CreateClientProtocolMapper", testifymock.Anything, "token", client.RealmName, clientID,
 		gocloak.ProtocolMapperRepresentation{
 			Name:           gocloak.StringP("test1234112554684"),
 			Protocol:       gocloak.StringP("openid-connect"),
@@ -467,8 +488,8 @@ func TestGoCloakAdapter_SyncClientProtocolMapper_ClientIDFailure(t *testing.T) {
 	clientID := "123"
 	mockErr := errors.New("fatal")
 
-	mockClient := new(MockGoCloakClient)
-	mockClient.On("GetClients", client.RealmName, gocloak.GetClientsParams{
+	mockClient := mocks.NewMockGoCloak(t)
+	mockClient.On("GetClients", testifymock.Anything, "token", client.RealmName, gocloak.GetClientsParams{
 		ClientID: &client.ClientId,
 	}).Return([]*gocloak.Client{
 		{
@@ -492,102 +513,26 @@ func TestGoCloakAdapter_SyncClientProtocolMapper_ClientIDFailure(t *testing.T) {
 	assert.ErrorIs(t, err, mockErr)
 }
 
-func TestGoCloakAdapter_SyncRealmRole_Duplicated(t *testing.T) {
-	mockClient := MockGoCloakClient{}
-	currentRole := gocloak.Role{Name: gocloak.StringP("role1")}
-
-	mockClient.On("GetRealmRole", "realm1", "role1").Return(&currentRole, nil)
-
-	adapter := GoCloakAdapter{
-		client: &mockClient,
-		token:  &gocloak.JWT{AccessToken: "token"},
-		log:    mock.NewLogr(),
-	}
-
-	role := dto.PrimaryRealmRole{Name: "role1"}
-
-	err := adapter.SyncRealmRole("realm1", &role)
-	if err == nil {
-		t.Fatal("no error returned on duplicated role")
-	}
-
-	if !IsErrDuplicated(err) {
-		t.Log(err)
-		t.Fatal("wrong error returned")
-	}
-}
-
-func TestGoCloakAdapter_SyncRealmRole(t *testing.T) {
-	mockClient := MockGoCloakClient{}
-	realmName, roleName, roleID := "realm1", "role1", "id321"
-	currentRole := gocloak.Role{Name: &roleName, ID: &roleID,
-		Composite: gocloak.BoolP(true), Description: gocloak.StringP(""),
-		Attributes: &map[string][]string{
-			"foo": []string{"foo", "bar"},
-		}}
-	mockClient.On("GetRealmRole", realmName, roleName).Return(&currentRole, nil)
-
-	composite1 := gocloak.Role{Name: gocloak.StringP("c1")}
-	mockClient.On("GetCompositeRealmRolesByRoleID", realmName, roleID).Return([]*gocloak.Role{
-		&composite1,
-	}, nil)
-
-	compositeFoo := gocloak.Role{Name: gocloak.StringP("foo")}
-	mockClient.On("GetRealmRole", realmName, *compositeFoo.Name).Return(&compositeFoo, nil)
-
-	compositeBar := gocloak.Role{Name: gocloak.StringP("bar")}
-	mockClient.On("GetRealmRole", realmName, *compositeBar.Name).Return(&compositeBar, nil)
-	mockClient.On("AddRealmRoleComposite", realmName, roleName,
-		[]gocloak.Role{compositeFoo, compositeBar}).
-		Return(nil)
-	mockClient.On("DeleteRealmRoleComposite", realmName, roleName, []gocloak.Role{
-		composite1,
-	}).Return(nil)
-	mockClient.On("UpdateRealmRole", realmName, roleName, currentRole).Return(nil)
-
-	realm := gocloak.RealmRepresentation{}
-	updatedRealm := gocloak.RealmRepresentation{DefaultRoles: &[]string{roleName}}
-
-	mockClient.On("GetRealm", "token", realmName).Return(&realm, nil)
-	mockClient.On("UpdateRealm", updatedRealm).Return(nil)
-
-	adapter := GoCloakAdapter{
-		client:   &mockClient,
-		token:    &gocloak.JWT{AccessToken: "token"},
-		basePath: "",
-		log:      mock.NewLogr(),
-	}
-
-	role := dto.PrimaryRealmRole{Name: roleName, Composites: []string{"foo", "bar"}, IsComposite: true,
-		Attributes: map[string][]string{
-			"foo": []string{"foo", "bar"},
-		}, IsDefault: true, ID: gocloak.StringP("id321")}
-
-	if err := adapter.SyncRealmRole(realmName, &role); err != nil {
-		require.NoError(t, err)
-	}
-}
-
 func TestGoCloakAdapter_SyncServiceAccountRoles_AddOnly(t *testing.T) {
-	mockClient := MockGoCloakClient{}
+	mockClient := mocks.NewMockGoCloak(t)
 	adapter := GoCloakAdapter{
-		client:   &mockClient,
+		client:   mockClient,
 		token:    &gocloak.JWT{AccessToken: "token"},
 		basePath: "",
 		log:      mock.NewLogr(),
 	}
 
-	mockClient.On("GetClientServiceAccount", "realm", "client").Return(&gocloak.User{
+	mockClient.On("GetClientServiceAccount", testifymock.Anything, "token", "realm", "client").Return(&gocloak.User{
 		ID: gocloak.StringP("id"),
 	}, nil)
 
-	mockClient.On("GetRoleMappingByUserID", "realm", "id").
+	mockClient.On("GetRoleMappingByUserID", testifymock.Anything, "token", "realm", "id").
 		Return(&gocloak.MappingsRepresentation{}, nil)
-	mockClient.On("GetRealmRole", "realm", "foo").
+	mockClient.On("GetRealmRole", testifymock.Anything, "token", "realm", "foo").
 		Return(&gocloak.Role{}, nil)
-	mockClient.On("AddRealmRoleToUser", "realm", "id", []gocloak.Role{{}}).
+	mockClient.On("AddRealmRoleToUser", testifymock.Anything, "token", "realm", "id", []gocloak.Role{{}}).
 		Return(nil)
-	mockClient.On("GetClients", "realm",
+	mockClient.On("GetClients", testifymock.Anything, "token", "realm",
 		gocloak.GetClientsParams{ClientID: gocloak.StringP("bar")}).Return(nil,
 		errors.New("get clients fatal"))
 
@@ -604,18 +549,18 @@ func TestGoCloakAdapter_SyncServiceAccountRoles_AddOnly(t *testing.T) {
 }
 
 func TestGoCloakAdapter_SyncServiceAccountRoles(t *testing.T) {
-	mockClient := MockGoCloakClient{}
+	mockClient := mocks.NewMockGoCloak(t)
 	adapter := GoCloakAdapter{
-		client:   &mockClient,
+		client:   mockClient,
 		token:    &gocloak.JWT{AccessToken: "token"},
 		basePath: "",
 		log:      mock.NewLogr(),
 	}
 
-	mockClient.On("GetClientServiceAccount", "realm", "client").Return(&gocloak.User{
+	mockClient.On("GetClientServiceAccount", testifymock.Anything, "token", "realm", "client").Return(&gocloak.User{
 		ID: gocloak.StringP("id"),
 	}, nil)
-	mockClient.On("GetRoleMappingByUserID", "realm", "id").
+	mockClient.On("GetRoleMappingByUserID", testifymock.Anything, "token", "realm", "id").
 		Return(&gocloak.MappingsRepresentation{RealmMappings: &[]gocloak.Role{
 			{Name: gocloak.StringP("exist_realm_role1")},
 			{Name: gocloak.StringP("exist_realm_role2")},
@@ -631,41 +576,34 @@ func TestGoCloakAdapter_SyncServiceAccountRoles(t *testing.T) {
 					{Name: gocloak.StringP("zaz")},
 				}},
 		}}, nil)
-	mockClient.On("GetRealmRole", "realm", "foo").
+	mockClient.On("GetRealmRole", testifymock.Anything, "token", "realm", "foo").
 		Return(&gocloak.Role{}, nil)
-	mockClient.On("GetRealmRole", "realm", "bar").
+	mockClient.On("GetRealmRole", testifymock.Anything, "token", "realm", "bar").
 		Return(&gocloak.Role{}, nil)
-	mockClient.On("AddRealmRoleToUser", "realm", "id", []gocloak.Role{{}, {}}).
+	mockClient.On("AddRealmRoleToUser", testifymock.Anything, "token", "realm", "id", []gocloak.Role{{}, {}}).
 		Return(nil)
-	mockClient.On("GetClients", "realm",
+	mockClient.On("GetClients", testifymock.Anything, "token", "realm",
 		gocloak.GetClientsParams{ClientID: gocloak.StringP("foo")}).Return([]*gocloak.Client{
 		{ClientID: gocloak.StringP("foo"), ID: gocloak.StringP("foo321")},
 	}, nil)
-	mockClient.On("GetClients", "realm",
+	mockClient.On("GetClients", testifymock.Anything, "token", "realm",
 		gocloak.GetClientsParams{ClientID: gocloak.StringP("bar")}).Return([]*gocloak.Client{
 		{ClientID: gocloak.StringP("bar"), ID: gocloak.StringP("bar321")},
 	}, nil)
-	mockClient.On("GetClientRole", "realm", "foo321", "foo").Return(&gocloak.Role{}, nil)
-	mockClient.On("GetClientRole", "realm", "foo321", "bar").Return(&gocloak.Role{}, nil)
-	mockClient.On("GetClientRole", "realm", "bar321", "john").Return(&gocloak.Role{}, nil)
-	mockClient.On("AddClientRoleToUser", "realm", "foo321", "id", []gocloak.Role{{}, {}}).
+	mockClient.On("GetClientRole", testifymock.Anything, "token", "realm", "foo321", "foo").Return(&gocloak.Role{}, nil)
+	mockClient.On("GetClientRole", testifymock.Anything, "token", "realm", "foo321", "bar").Return(&gocloak.Role{}, nil)
+	mockClient.On("GetClientRole", testifymock.Anything, "token", "realm", "bar321", "john").Return(&gocloak.Role{}, nil)
+	mockClient.On("AddClientRoleToUser", testifymock.Anything, "token", "realm", "foo321", "id", testifymock.Anything).
 		Return(nil)
-	mockClient.On("AddClientRoleToUser", "realm", "bar321", "id", []gocloak.Role{{}}).
+	mockClient.On("AddClientRoleToUser", testifymock.Anything, "token", "realm", "bar321", "id", testifymock.Anything).
 		Return(nil)
-	mockClient.On("DeleteRealmRoleFromUser", "realm", "id", []gocloak.Role{
-		{Name: gocloak.StringP("exist_realm_role1")},
-		{Name: gocloak.StringP("exist_realm_role2")},
-	}).Return(nil)
-	mockClient.On("DeleteClientRoleFromUser", "realm", "foo321", "id",
-		[]gocloak.Role{
-			{Name: gocloak.StringP("baz")},
-			{Name: gocloak.StringP("zaz")},
-		}).Return(nil)
-	mockClient.On("DeleteClientRoleFromUser", "realm", "iiss123", "id",
-		[]gocloak.Role{
-			{Name: gocloak.StringP("exist_client_role1")},
-			{Name: gocloak.StringP("exist_client_role2")},
-		}).Return(nil)
+	mockClient.On("DeleteRealmRoleFromUser", testifymock.Anything, "token", "realm", "id", testifymock.Anything).Return(nil)
+	mockClient.On("DeleteClientRoleFromUser", testifymock.Anything, "token", "realm", "foo321", "id",
+		testifymock.MatchedBy(func(roles []gocloak.Role) bool {
+			return len(roles) == 2
+		}),
+	).Return(nil)
+	mockClient.On("DeleteClientRoleFromUser", testifymock.Anything, "token", "realm", "iiss123", "id", testifymock.Anything).Return(nil)
 
 	if err := adapter.SyncServiceAccountRoles("realm", "client", []string{"foo", "bar"},
 		map[string][]string{
@@ -677,10 +615,10 @@ func TestGoCloakAdapter_SyncServiceAccountRoles(t *testing.T) {
 }
 
 func TestGoCloakAdapter_SyncRealmGroup_FailureGetGroupsFatal(t *testing.T) {
-	clMock := MockGoCloakClient{}
+	clMock := mocks.NewMockGoCloak(t)
 
 	adapter := GoCloakAdapter{
-		client: &clMock,
+		client: clMock,
 		token:  &gocloak.JWT{AccessToken: "token"},
 	}
 
@@ -688,7 +626,7 @@ func TestGoCloakAdapter_SyncRealmGroup_FailureGetGroupsFatal(t *testing.T) {
 		Name: "group1",
 	}
 
-	clMock.On("GetGroups", "realm1", gocloak.GetGroupsParams{
+	clMock.On("GetGroups", testifymock.Anything, "token", "realm1", gocloak.GetGroupsParams{
 		Search: &group.Name,
 	}).Return(nil, errors.New("fatal mock"))
 
@@ -704,9 +642,9 @@ func TestGoCloakAdapter_SyncRealmGroup_FailureGetGroupsFatal(t *testing.T) {
 }
 
 func TestGoCloakAdapter_SyncRealmGroup(t *testing.T) {
-	mockClient := MockGoCloakClient{}
+	mockClient := mocks.NewMockGoCloak(t)
 	adapter := GoCloakAdapter{
-		client:   &mockClient,
+		client:   mockClient,
 		token:    &gocloak.JWT{AccessToken: "token"},
 		basePath: "",
 		log:      mock.NewLogr(),
@@ -714,11 +652,11 @@ func TestGoCloakAdapter_SyncRealmGroup(t *testing.T) {
 
 	oldChildGroup := gocloak.Group{Name: gocloak.StringP("old-group")}
 
-	mockClient.On("GetGroups", "realm1",
+	mockClient.On("GetGroups", testifymock.Anything, "token", "realm1",
 		gocloak.GetGroupsParams{Search: gocloak.StringP("group1")}).
 		Return([]*gocloak.Group{{Name: gocloak.StringP("group1"), ID: gocloak.StringP("1"),
-			SubGroups: &[]gocloak.Group{oldChildGroup}}}, nil)
-	mockClient.On("UpdateGroup", "realm1", gocloak.Group{Name: gocloak.StringP("group1"),
+			SubGroups: &[]gocloak.Group{oldChildGroup}}}, nil).Once()
+	mockClient.On("UpdateGroup", testifymock.Anything, "token", "realm1", gocloak.Group{Name: gocloak.StringP("group1"),
 		Attributes: &map[string][]string{"foo": {"foo", "bar"}},
 		Path:       gocloak.StringP(""),
 		Access:     &map[string]bool{}, ID: gocloak.StringP("1"),
@@ -734,7 +672,7 @@ func TestGoCloakAdapter_SyncRealmGroup(t *testing.T) {
 	newClientRole1, newClientRole2, newClientRole4 := gocloak.Role{Name: gocloak.StringP("client-role1")},
 		gocloak.Role{Name: gocloak.StringP("client-role2")}, gocloak.Role{Name: gocloak.StringP("client-role4")}
 
-	mockClient.On("GetRoleMappingByGroupID", "realm1", "1").
+	mockClient.On("GetRoleMappingByGroupID", testifymock.Anything, "token", "realm1", "1").
 		Return(&gocloak.MappingsRepresentation{
 			RealmMappings: &[]gocloak.Role{oldRole1, oldRole2},
 			ClientMappings: map[string]*gocloak.ClientMappingsRepresentation{
@@ -748,38 +686,38 @@ func TestGoCloakAdapter_SyncRealmGroup(t *testing.T) {
 	subGroup1, subGroup2 := gocloak.Group{Name: gocloak.StringP("subgroup1"), ID: gocloak.StringP("2")},
 		gocloak.Group{Name: gocloak.StringP("subgroup2"), ID: gocloak.StringP("3")}
 
-	mockClient.On("CreateChildGroup", "realm1", "1", &gocloak.Group{}).Return(nil)
-
-	mockClient.On("GetGroups", "realm1",
-		gocloak.GetGroupsParams{Search: subGroup1.Name}).
-		Return([]*gocloak.Group{&subGroup1}, nil)
-	mockClient.On("GetGroups", "realm1",
-		gocloak.GetGroupsParams{Search: subGroup2.Name}).
+	mockClient.On("GetGroups", testifymock.Anything, "token", "realm1",
+		testifymock.Anything).
+		Return([]*gocloak.Group{&subGroup1}, nil).Once()
+	mockClient.On("GetGroups", testifymock.Anything, "token", "realm1",
+		testifymock.Anything).
 		Return([]*gocloak.Group{&subGroup2}, nil)
-	mockClient.On("CreateChildGroup", "realm1", "1", subGroup1).Return("", nil)
-	mockClient.On("CreateChildGroup", "realm1", "1", subGroup2).Return("", nil)
-	mockClient.On("CreateGroup", "realm1", oldChildGroup).Return("", nil)
-	mockClient.On("GetRealmRole", "realm1", "realm-role1").Return(&newRole1, nil)
-	mockClient.On("GetRealmRole", "realm1", "realm-role2").Return(&newRole2, nil)
-	mockClient.On("AddRealmRoleToGroup", "realm1", "1", []gocloak.Role{newRole1, newRole2}).Return(nil)
-	mockClient.On("DeleteRealmRoleFromGroup", "realm1", "1", []gocloak.Role{oldRole1, oldRole2}).Return(nil)
-	mockClient.On("GetClients", "realm1",
+	mockClient.On("CreateChildGroup", testifymock.Anything, "token", "realm1", "1", subGroup1).Return("", nil).Once()
+	mockClient.On("CreateChildGroup", testifymock.Anything, "token", "realm1", "1", subGroup2).Return("", nil).Once()
+	mockClient.On("CreateGroup", testifymock.Anything, "token", "realm1", oldChildGroup).Return("", nil)
+	mockClient.On("GetRealmRole", testifymock.Anything, "token", "realm1", "realm-role1").Return(&newRole1, nil)
+	mockClient.On("GetRealmRole", testifymock.Anything, "token", "realm1", "realm-role2").Return(&newRole2, nil)
+	mockClient.On("AddRealmRoleToGroup", testifymock.Anything, "token", "realm1", "1", []gocloak.Role{newRole1, newRole2}).Return(nil)
+	mockClient.On("DeleteRealmRoleFromGroup", testifymock.Anything, "token", "realm1", "1", testifymock.Anything).Return(nil)
+	mockClient.On("GetClients", testifymock.Anything, "token", "realm1",
 		gocloak.GetClientsParams{ClientID: gocloak.StringP("client1")}).
 		Return([]*gocloak.Client{{ID: gocloak.StringP("clid1"), ClientID: gocloak.StringP("client1")}}, nil)
-	mockClient.On("GetClients", "realm1",
+	mockClient.On("GetClients", testifymock.Anything, "token", "realm1",
 		gocloak.GetClientsParams{ClientID: gocloak.StringP("old-cl-3")}).
 		Return([]*gocloak.Client{{ID: gocloak.StringP("3214"), ClientID: gocloak.StringP("old-cl-3")}}, nil)
-	mockClient.On("GetClientRole", "realm1", "clid1", *newClientRole1.Name).Return(&newClientRole1, nil)
-	mockClient.On("GetClientRole", "realm1", "clid1", *newClientRole2.Name).Return(&newClientRole2, nil)
-	mockClient.On("GetClientRole", "realm1", "3214", *newClientRole4.Name).Return(&newClientRole4, nil)
-	mockClient.On("AddClientRoleToGroup", "realm1", "clid1", "1",
-		[]gocloak.Role{newClientRole1, newClientRole2}).Return(nil)
-	mockClient.On("AddClientRoleToGroup", "realm1", "3214", "1",
+	mockClient.On("GetClientRole", testifymock.Anything, "token", "realm1", "clid1", *newClientRole1.Name).Return(&newClientRole1, nil)
+	mockClient.On("GetClientRole", testifymock.Anything, "token", "realm1", "clid1", *newClientRole2.Name).Return(&newClientRole2, nil)
+	mockClient.On("GetClientRole", testifymock.Anything, "token", "realm1", "3214", *newClientRole4.Name).Return(&newClientRole4, nil)
+	mockClient.On("AddClientRoleToGroup", testifymock.Anything, "token", "realm1", "clid1", "1",
+		testifymock.MatchedBy(func(roles []gocloak.Role) bool {
+			return len(roles) == 2
+		})).Return(nil)
+	mockClient.On("AddClientRoleToGroup", testifymock.Anything, "token", "realm1", "3214", "1",
 		[]gocloak.Role{newClientRole4}).Return(nil)
 
-	mockClient.On("DeleteClientRoleFromGroup", "realm1", "321", "1",
+	mockClient.On("DeleteClientRoleFromGroup", testifymock.Anything, "token", "realm1", "321", "1",
 		[]gocloak.Role{oldClientRole1, oldClientRole2}).Return(nil)
-	mockClient.On("DeleteClientRoleFromGroup", "realm1", "3214", "1",
+	mockClient.On("DeleteClientRoleFromGroup", testifymock.Anything, "token", "realm1", "3214", "1",
 		[]gocloak.Role{oldClientRole3}).Return(nil)
 
 	groupID, err := adapter.SyncRealmGroup("realm1", &keycloakApi.KeycloakRealmGroupSpec{
@@ -803,17 +741,17 @@ func TestGoCloakAdapter_SyncRealmGroup(t *testing.T) {
 }
 
 func TestGoCloakAdapter_DeleteGroup(t *testing.T) {
-	mockClient := MockGoCloakClient{}
+	mockClient := mocks.NewMockGoCloak(t)
 	adapter := GoCloakAdapter{
-		client:   &mockClient,
+		client:   mockClient,
 		token:    &gocloak.JWT{AccessToken: "token"},
 		basePath: "",
 		log:      mock.NewLogr(),
 	}
 
-	mockClient.On("GetGroups", "realm1", gocloak.GetGroupsParams{Search: gocloak.StringP("group1")}).
+	mockClient.On("GetGroups", testifymock.Anything, "token", "realm1", gocloak.GetGroupsParams{Search: gocloak.StringP("group1")}).
 		Return([]*gocloak.Group{{Name: gocloak.StringP("group1"), ID: gocloak.StringP("1")}}, nil)
-	mockClient.On("DeleteGroup", "realm1", "1").Return(nil)
+	mockClient.On("DeleteGroup", testifymock.Anything, "token", "realm1", "1").Return(nil)
 
 	if err := adapter.DeleteGroup(context.Background(), "realm1", "group1"); err != nil {
 		t.Fatalf("%+v", err)
@@ -947,7 +885,7 @@ func TestMakeFromToken(t *testing.T) {
 				defer tt.mockServer.Close()
 			}
 
-			cl, err := MakeFromToken(url, token, mock.NewLogr())
+			cl, err := MakeFromToken(GoCloakConfig{Url: url}, token, mock.NewLogr())
 			tt.wantErr(t, err, cl)
 		})
 	}
@@ -956,43 +894,9 @@ func TestMakeFromToken(t *testing.T) {
 func TestMakeFromToken_invalidJSON(t *testing.T) {
 	t.Parallel()
 
-	_, err := MakeFromToken("test_url", []byte("qwdqwdwq"), mock.NewLogr())
+	_, err := MakeFromToken(GoCloakConfig{Url: "test_url"}, []byte("qwdqwdwq"), mock.NewLogr())
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "invalid character")
-}
-
-func TestGoCloakAdapter_CreateCentralIdentityProvider(t *testing.T) {
-	mockClient := MockGoCloakClient{}
-	restyClient := resty.New()
-	httpmock.ActivateNonDefault(restyClient.GetClient())
-	mockClient.On("RestyClient").Return(restyClient)
-
-	a := GoCloakAdapter{
-		log:    mock.NewLogr(),
-		client: &mockClient,
-		token:  &gocloak.JWT{AccessToken: "token"},
-	}
-	realm := dto.Realm{Name: "name1", SsoRealmName: "sso-realm1"}
-
-	httpmock.RegisterResponder("POST",
-		fmt.Sprintf("/admin/realms/%s/identity-provider/instances", realm.Name),
-		httpmock.NewStringResponder(201, ""))
-
-	httpmock.RegisterResponder("POST",
-		fmt.Sprintf("/admin/realms/%s/identity-provider/instances/%s/mappers", realm.Name, realm.SsoRealmName),
-		httpmock.NewStringResponder(201, ""))
-
-	err := a.CreateCentralIdentityProvider(&realm, &dto.Client{})
-	assert.NoError(t, err)
-
-	httpmock.RegisterResponder("POST",
-		fmt.Sprintf("/admin/realms/%s/identity-provider/instances/%s/mappers", realm.Name, realm.SsoRealmName),
-		httpmock.NewStringResponder(500, "fatal"))
-
-	err = a.CreateCentralIdentityProvider(&realm, &dto.Client{})
-	assert.Error(t, err)
-	assert.EqualError(t, err,
-		"unable to create central idp mappers: unable to create central idp mapper: error in creation idP mapper by name administrator")
 }
 
 func (e *AdapterTestSuite) TestGoCloakAdapter_DeleteRealmUser() {
@@ -1000,7 +904,7 @@ func (e *AdapterTestSuite) TestGoCloakAdapter_DeleteRealmUser() {
 	httpmock.RegisterResponder("DELETE",
 		fmt.Sprintf("/admin/realms/%s/users/%s", e.realmName, username),
 		httpmock.NewStringResponder(200, ""))
-	e.goCloakMockClient.On("GetUsers", e.realmName, gocloak.GetUsersParams{Username: &username}).
+	e.goCloakMockClient.On("GetUsers", testifymock.Anything, "token", e.realmName, gocloak.GetUsersParams{Username: &username}).
 		Return([]*gocloak.User{
 			{Username: &username, ID: &username},
 		}, nil).Once()
@@ -1008,7 +912,7 @@ func (e *AdapterTestSuite) TestGoCloakAdapter_DeleteRealmUser() {
 	err := e.adapter.DeleteRealmUser(context.Background(), e.realmName, username)
 	assert.NoError(e.T(), err)
 
-	e.goCloakMockClient.On("GetUsers", e.realmName, gocloak.GetUsersParams{Username: &username}).
+	e.goCloakMockClient.On("GetUsers", testifymock.Anything, "token", e.realmName, gocloak.GetUsersParams{Username: &username}).
 		Return([]*gocloak.User{
 			{Username: &username, ID: &username},
 		}, nil).Once()
@@ -1020,7 +924,7 @@ func (e *AdapterTestSuite) TestGoCloakAdapter_DeleteRealmUser() {
 	assert.Error(e.T(), err)
 	assert.EqualError(e.T(), err, "unable to delete user: status: 404, body: ")
 
-	e.goCloakMockClient.On("GetUsers", e.realmName, gocloak.GetUsersParams{Username: &username}).
+	e.goCloakMockClient.On("GetUsers", testifymock.Anything, "token", e.realmName, gocloak.GetUsersParams{Username: &username}).
 		Return([]*gocloak.User{
 			{},
 		}, nil).Once()
@@ -1029,7 +933,7 @@ func (e *AdapterTestSuite) TestGoCloakAdapter_DeleteRealmUser() {
 	assert.Error(e.T(), err)
 	assert.EqualError(e.T(), err, "user not found")
 
-	e.goCloakMockClient.On("GetUsers", e.realmName, gocloak.GetUsersParams{Username: &username}).
+	e.goCloakMockClient.On("GetUsers", testifymock.Anything, "token", e.realmName, gocloak.GetUsersParams{Username: &username}).
 		Return(nil, errors.New("fatal get users")).Once()
 
 	err = e.adapter.DeleteRealmUser(context.Background(), e.realmName, username)
@@ -1037,137 +941,183 @@ func (e *AdapterTestSuite) TestGoCloakAdapter_DeleteRealmUser() {
 	assert.EqualError(e.T(), err, "unable to get users: fatal get users")
 }
 
-func TestGoCloakAdapter_PutDefaultIdp(t *testing.T) {
-	mockClient := MockGoCloakClient{}
-	adapter := GoCloakAdapter{
-		client:   &mockClient,
-		token:    &gocloak.JWT{AccessToken: "token"},
-		basePath: "",
-		log:      mock.NewLogr(),
+func TestGoCloakAdapter_GetUsersByNames(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name    string
+		client  func(t *testing.T) GoCloak
+		names   []string
+		wantErr require.ErrorAssertionFunc
+		want    map[string]gocloak.User
+	}{
+		{
+			name: "should return users",
+			client: func(t *testing.T) GoCloak {
+				mockClient := mocks.NewMockGoCloak(t)
+				param := gocloak.GetUsersParams{
+					BriefRepresentation: gocloak.BoolP(true),
+					Max:                 gocloak.IntP(100),
+					Username:            gocloak.StringP("user1"),
+				}
+				mockClient.On(
+					"GetUsers", testifymock.Anything, "token", "master", param).
+					Return([]*gocloak.User{
+						{Username: gocloak.StringP("user1")},
+					}, nil)
+				param2 := gocloak.GetUsersParams{
+					BriefRepresentation: gocloak.BoolP(true),
+					Max:                 gocloak.IntP(100),
+					Username:            gocloak.StringP("user2"),
+				}
+				param.Username = gocloak.StringP("user2")
+				mockClient.On("GetUsers", testifymock.Anything, "token", "master", param2).
+					Return([]*gocloak.User{
+						{Username: gocloak.StringP("user2")},
+					}, nil)
+				param3 := gocloak.GetUsersParams{
+					BriefRepresentation: gocloak.BoolP(true),
+					Max:                 gocloak.IntP(100),
+					Username:            gocloak.StringP("user3"),
+				}
+				param3.Username = gocloak.StringP("user3")
+				mockClient.On("GetUsers", testifymock.Anything, "token", "master", param3).
+					Return(nil, nil)
+
+				return mockClient
+			},
+			names:   []string{"user1", "user2", "user3"},
+			wantErr: require.NoError,
+			want: map[string]gocloak.User{
+				"user1": {Username: gocloak.StringP("user1")},
+				"user2": {Username: gocloak.StringP("user2")},
+			},
+		},
+		{
+			name: "keycloak api error",
+			client: func(t *testing.T) GoCloak {
+				mockClient := mocks.NewMockGoCloak(t)
+				param := gocloak.GetUsersParams{
+					BriefRepresentation: gocloak.BoolP(true),
+					Max:                 gocloak.IntP(100),
+					Username:            gocloak.StringP("user1"),
+				}
+				mockClient.On(
+					"GetUsers", testifymock.Anything, "token", "master", param).
+					Return([]*gocloak.User{
+						{Username: gocloak.StringP("user1")},
+					}, nil)
+				param2 := gocloak.GetUsersParams{
+					BriefRepresentation: gocloak.BoolP(true),
+					Max:                 gocloak.IntP(100),
+					Username:            gocloak.StringP("user2"),
+				}
+				param.Username = gocloak.StringP("user2")
+				mockClient.On("GetUsers", testifymock.Anything, "token", "master", param2).
+					Return(nil, errors.New("fatal"))
+
+				return mockClient
+			},
+			names: []string{"user1", "user2"},
+			wantErr: func(t require.TestingT, err error, i ...interface{}) {
+				require.Error(t, err)
+				require.Contains(t, err.Error(), "fatal")
+			},
+			want: nil,
+		},
 	}
 
-	realm := dto.Realm{Name: "realm1", SsoAutoRedirectEnabled: false}
+	for _, tt := range tests {
+		tt := tt
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
 
-	restyClient := resty.New()
-	httpmock.ActivateNonDefault(restyClient.GetClient())
-	mockClient.On("RestyClient").Return(restyClient)
+			a := GoCloakAdapter{
+				client: tt.client(t),
+				token:  &gocloak.JWT{AccessToken: "token"},
+				log:    logr.Discard(),
+			}
 
-	authExecs := []api.SimpleAuthExecution{{
-		ProviderId: "identity-provider-redirector",
-		Id:         "id1",
-	}, {}}
-	authExecsRsp, err := httpmock.NewJsonResponder(200, authExecs)
-	require.NoError(t, err)
+			got, err := a.GetUsersByNames(context.Background(), "master", tt.names)
 
-	httpmock.RegisterResponder(
-		"GET",
-		fmt.Sprintf("/admin/realms/%s/authentication/flows/browser/executions", realm.Name),
-		authExecsRsp)
-
-	httpmock.RegisterResponder("POST",
-		fmt.Sprintf("/admin/realms/%s/authentication/executions/%s/config", realm.Name, authExecs[0].Id),
-		httpmock.NewStringResponder(201, "ok"))
-
-	httpmock.RegisterResponder("PUT",
-		fmt.Sprintf("/admin/realms/%s/authentication/flows/browser/executions", realm.Name),
-		httpmock.NewStringResponder(202, "ok"))
-
-	if err := adapter.PutDefaultIdp(&realm); err != nil {
-		t.Fatalf("%+v", err)
+			tt.wantErr(t, err)
+			assert.Equal(t, tt.want, got)
+		})
 	}
 }
 
-func TestGoCloakAdapter_PutDefaultIdp1(t *testing.T) {
+func TestGoCloakAdapter_CreatePrimaryRealmRole(t *testing.T) {
 	t.Parallel()
 
-	const (
-		realm       = "realm1"
-		executionID = "executionID"
-		configID    = "configID1"
-	)
-
-	authExecutionsEndpoint := strings.ReplaceAll(authExecutions, "{realm}", realm)
-	authExecutionsConfigEndpoint := strings.ReplaceAll(
-		strings.ReplaceAll(authExecutionConfig, "{realm}", realm),
-		"{id}",
-		executionID,
-	)
-	authFlowConfigEndpoint := strings.ReplaceAll(
-		strings.ReplaceAll(authFlowConfig, "{realm}", "realm1"),
-		"{id}",
-		configID,
+	var (
+		token = "token"
+		realm = "realm"
 	)
 
 	tests := []struct {
-		name       string
-		realm      *dto.Realm
-		mockServer fakehttp.Server
-		wantErr    require.ErrorAssertionFunc
+		name    string
+		role    *dto.PrimaryRealmRole
+		client  func(t *testing.T) *mocks.MockGoCloak
+		want    string
+		wantErr require.ErrorAssertionFunc
 	}{
 		{
-			name: "update default identity provider config",
-			realm: &dto.Realm{
-				Name: realm,
+			name: "should create role successfully",
+			role: &dto.PrimaryRealmRole{
+				Name:        "role1",
+				Description: "Role description",
 			},
-			mockServer: fakehttp.NewServerBuilder().
-				AddJsonResponderWithCode(
-					http.StatusOK,
-					authExecutionsEndpoint,
-					[]api.SimpleAuthExecution{
-						{
-							Id:                   executionID,
-							ProviderId:           "identity-provider-redirector",
-							AuthenticationConfig: configID,
-						},
-					},
-				).
-				AddStringResponder(authFlowConfigEndpoint, "").
-				BuildAndStart(),
+			client: func(t *testing.T) *mocks.MockGoCloak {
+				m := mocks.NewMockGoCloak(t)
+
+				m.On(
+					"CreateRealmRole",
+					testifymock.Anything,
+					token,
+					realm,
+					testifymock.MatchedBy(func(role gocloak.Role) bool {
+						return assert.Equal(t, "role1", *role.Name) &&
+							assert.Equal(t, "Role description", *role.Description)
+					})).
+					Return("", nil)
+
+				m.On("GetRealmRole", testifymock.Anything, token, realm, testifymock.Anything).
+					Return(&gocloak.Role{Name: gocloak.StringP("role1"), ID: gocloak.StringP("role1-id")}, nil)
+
+				return m
+			},
+			want:    "role1-id",
 			wantErr: require.NoError,
 		},
 		{
-			name: "create default identity provider config",
-			realm: &dto.Realm{
-				Name:                   realm,
-				SsoAutoRedirectEnabled: true,
+			name: "should fail to get role",
+			role: &dto.PrimaryRealmRole{
+				Name:        "role1",
+				Description: "Role description",
 			},
-			mockServer: fakehttp.NewServerBuilder().
-				AddJsonResponderWithCode(
-					http.StatusOK,
-					authExecutionsEndpoint,
-					[]api.SimpleAuthExecution{
-						{
-							Id:         executionID,
-							ProviderId: "identity-provider-redirector",
-						},
-					},
-				).
-				AddStringResponderWithCode(http.StatusCreated, authExecutionsConfigEndpoint, "").
-				BuildAndStart(),
-			wantErr: require.NoError,
-		},
-		{
-			name: "failed to update default identity provider config",
-			realm: &dto.Realm{
-				Name: realm,
+			client: func(t *testing.T) *mocks.MockGoCloak {
+				m := mocks.NewMockGoCloak(t)
+
+				m.On(
+					"CreateRealmRole",
+					testifymock.Anything,
+					token,
+					realm,
+					testifymock.MatchedBy(func(role gocloak.Role) bool {
+						return assert.Equal(t, "role1", *role.Name) &&
+							assert.Equal(t, "Role description", *role.Description)
+					})).
+					Return("", nil)
+
+				m.On("GetRealmRole", testifymock.Anything, token, realm, testifymock.Anything).
+					Return(nil, errors.New("failed to get role"))
+
+				return m
 			},
-			mockServer: fakehttp.NewServerBuilder().
-				AddJsonResponderWithCode(
-					http.StatusOK,
-					authExecutionsEndpoint,
-					[]api.SimpleAuthExecution{
-						{
-							Id:                   executionID,
-							ProviderId:           "identity-provider-redirector",
-							AuthenticationConfig: configID,
-						},
-					},
-				).
-				AddStringResponderWithCode(http.StatusBadRequest, authFlowConfigEndpoint, "").
-				BuildAndStart(),
+			want: "",
 			wantErr: func(t require.TestingT, err error, i ...interface{}) {
 				require.Error(t, err)
-				require.Contains(t, err.Error(), "failed to update redirect config")
+				require.Contains(t, err.Error(), "failed to get role")
 			},
 		},
 	}
@@ -1178,20 +1128,15 @@ func TestGoCloakAdapter_PutDefaultIdp1(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			defer tt.mockServer.Close()
-
 			a := GoCloakAdapter{
-				client: gocloak.NewClient(tt.mockServer.GetURL()),
+				client: tt.client(t),
+				token:  &gocloak.JWT{AccessToken: token},
 				log:    logr.Discard(),
-				token: &gocloak.JWT{
-					AccessToken: "token",
-				},
-				basePath: tt.mockServer.GetURL(),
 			}
 
-			err := a.PutDefaultIdp(tt.realm)
-
+			got, err := a.CreatePrimaryRealmRole(ctrl.LoggerInto(context.Background(), logr.Discard()), realm, tt.role)
 			tt.wantErr(t, err)
+			assert.Equal(t, tt.want, got)
 		})
 	}
 }

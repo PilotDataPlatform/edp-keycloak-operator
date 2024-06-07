@@ -13,4 +13,4 @@ kind: Kustomization
 images:
 - name: controller
   newName: pilotdataplatform.azurecr.io/operator/keycloak-operator
-  newTag: 1.18.1-indoc
+  newTag: 1.21.0-indoc

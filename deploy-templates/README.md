@@ -1,6 +1,6 @@
 # keycloak-operator
 
-![Version: 1.19.0-SNAPSHOT](https://img.shields.io/badge/Version-1.19.0--SNAPSHOT-informational?style=flat-square) ![Type: application](https://img.shields.io/badge/Type-application-informational?style=flat-square) ![AppVersion: 1.19.0-SNAPSHOT](https://img.shields.io/badge/AppVersion-1.19.0--SNAPSHOT-informational?style=flat-square)
+![Version: 1.22.0-SNAPSHOT](https://img.shields.io/badge/Version-1.22.0--SNAPSHOT-informational?style=flat-square) ![Type: application](https://img.shields.io/badge/Type-application-informational?style=flat-square) ![AppVersion: 1.22.0-SNAPSHOT](https://img.shields.io/badge/AppVersion-1.22.0--SNAPSHOT-informational?style=flat-square)
 
 A Helm chart for EDP Keycloak Operator
 
@@ -32,8 +32,8 @@ To install the Keycloak Operator, follow the steps below:
      ```bash
      helm search repo epamedp/keycloak-operator -l
      NAME                           CHART VERSION   APP VERSION     DESCRIPTION
-     epamedp/keycloak-operator      1.17.0          1.17.0          A Helm chart for EDP Keycloak Operator
-     epamedp/keycloak-operator      1.16.0          1.16.0          A Helm chart for EDP Keycloak Operator
+     epamedp/keycloak-operator      1.19.0          1.19.0          A Helm chart for EDP Keycloak Operator
+     epamedp/keycloak-operator      1.18.2          1.18.2          A Helm chart for EDP Keycloak Operator
      ```
 
     _**NOTE:** It is highly recommended to use the latest stable version._
@@ -136,6 +136,7 @@ Development versions are also available from the [snapshot helm chart repository
 | image.repository | string | `"epamedp/keycloak-operator"` | EDP keycloak-operator Docker image name. The released image can be found on [Dockerhub](https://hub.docker.com/r/epamedp/keycloak-operator) |
 | image.tag | string | `nil` | EDP keycloak-operator Docker image tag. The released image can be found on [Dockerhub](https://hub.docker.com/r/epamedp/keycloak-operator/tags) |
 | imagePullPolicy | string | `"IfNotPresent"` | If defined, a imagePullPolicy applied to the deployment |
+| imagePullSecrets | list | `[]` | If defined, imagePullSecrets are applied to deployment |
 | name | string | `"keycloak-operator"` | Application name string |
 | nodeSelector | object | `{}` | Node labels for pod assignment |
 | resources | object | `{"limits":{"memory":"192Mi"},"requests":{"cpu":"50m","memory":"64Mi"}}` | Resource limits and requests for the pod |

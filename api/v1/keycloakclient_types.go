@@ -29,8 +29,12 @@ type KeycloakClientSpec struct {
 	// +optional
 	RealmRef common.RealmRef `json:"realmRef"`
 
-	// Secret is a client secret used for authentication. If not provided, it will be generated.
+	// Secret is kubernetes secret name where the client's secret will be stored.
+	// Secret should have the following format: $secretName:secretKey.
+	// If not specified, a client secret will be generated and stored in a secret with the name keycloak-client-{metadata.name}-secret.
+	// If keycloak client is public, secret property will be ignored.
 	// +optional
+	// +kubebuilder:example="$keycloak-secret:client_secret"
 	Secret string `json:"secret,omitempty"`
 
 	// RealmRoles is a list of realm roles assigned to client.
@@ -107,6 +111,67 @@ type KeycloakClientSpec struct {
 	// +nullable
 	// +optional
 	AuthenticationFlowBindingOverrides map[string]string `json:"authenticationFlowBindingOverrides,omitempty"`
+	
+	// WebOrigins is a list of allowed CORS origins.
+	// To permit all origins of Valid Redirect URIs, add '+'. This does not include the '*' wildcard though.
+	// To permit all origins, explicitly add '*'.
+	// If not specified, the value from `WebUrl` is used
+	// +nullable
+	// +optional
+	// +kubebuilder:example={"https://example.com/*"}
+	WebOrigins []string `json:"webOrigins,omitempty"`
+
+	// ImplicitFlowEnabled is a flag to enable support for OpenID Connect redirect based authentication without authorization code.
+	// +optional
+	ImplicitFlowEnabled bool `json:"implicitFlowEnabled,omitempty"`
+
+	// ServiceAccountsEnabled enable/disable fine-grained authorization support for a client.
+	// +optional
+	AuthorizationServicesEnabled bool `json:"authorizationServicesEnabled,omitempty"`
+
+	// BearerOnly is a flag to enable bearer-only.
+	// +optional
+	BearerOnly bool `json:"bearerOnly,omitempty"`
+
+	// ClientAuthenticatorType is a client authenticator type.
+	// +optional
+	// +kubebuilder:default="client-secret"
+	ClientAuthenticatorType string `json:"clientAuthenticatorType,omitempty"`
+
+	// ConsentRequired is a flag to enable consent.
+	// +optional
+	ConsentRequired bool `json:"consentRequired,omitempty"`
+
+	// Description is a client description.
+	// +optional
+	Description string `json:"description,omitempty"`
+
+	// Enabled is a flag to enable client.
+	// +optional
+	// +kubebuilder:default=true
+	Enabled bool `json:"enabled,omitempty"`
+
+	// FullScopeAllowed is a flag to enable full scope.
+	// +optional
+	// +kubebuilder:default=true
+	FullScopeAllowed bool `json:"fullScopeAllowed,omitempty"`
+
+	// Name is a client name.
+	// +optional
+	Name string `json:"name,omitempty"`
+
+	// StandardFlowEnabled is a flag to enable standard flow.
+	// +optional
+	// +kubebuilder:default=true
+	StandardFlowEnabled bool `json:"standardFlowEnabled,omitempty"`
+
+	// SurrogateAuthRequired is a flag to enable surrogate auth.
+	SurrogateAuthRequired bool `json:"surrogateAuthRequired,omitempty"`
+
+	// Authorization is a client authorization configuration.
+	// +nullable
+	// +optional
+	Authorization *Authorization `json:"authorization,omitempty"`
 }
 
 type ServiceAccount struct {
@@ -168,6 +233,14 @@ type RealmRole struct {
 	Composite string `json:"composite"`
 }
 
+type Authorization struct {
+	Scopes []string `json:"scopes,omitempty"`
+
+	Policies []Policy `json:"policies,omitempty"`
+
+	Permissions []Permission `json:"permissions,omitempty"`
+}
+
 // KeycloakClientStatus defines the observed state of KeycloakClient.
 type KeycloakClientStatus struct {
 	// +optional
@@ -178,14 +251,12 @@ type KeycloakClientStatus struct {
 
 	// +optional
 	FailureCount int64 `json:"failureCount,omitempty"`
-
-	// +optional
-	ClientSecretName string `json:"clientSecretName,omitempty"`
 }
 
 // +kubebuilder:object:root=true
 // +kubebuilder:subresource:status
 // +kubebuilder:storageversion
+// +kubebuilder:printcolumn:name="Status",type="string",JSONPath=".status.value",description="Reconcilation status"
 
 // KeycloakClient is the Schema for the keycloak clients API.
 type KeycloakClient struct {
