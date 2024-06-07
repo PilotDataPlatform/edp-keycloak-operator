@@ -111,7 +111,7 @@ type KeycloakClientSpec struct {
 	// +nullable
 	// +optional
 	AuthenticationFlowBindingOverrides map[string]string `json:"authenticationFlowBindingOverrides,omitempty"`
-	
+
 	// WebOrigins is a list of allowed CORS origins.
 	// To permit all origins of Valid Redirect URIs, add '+'. This does not include the '*' wildcard though.
 	// To permit all origins, explicitly add '*'.
