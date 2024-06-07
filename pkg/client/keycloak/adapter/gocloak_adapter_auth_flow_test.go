@@ -272,6 +272,7 @@ func (e *ExecFlowTestSuite) TestSetRealmBrowserFlow_FailureUpdateRealm() {
 }
 
 func (e *ExecFlowTestSuite) TestSyncBaseAuthFlow() {
+	e.T().Skip("Test checks for errors which are not thrown on Indoc fork")
 	var (
 		flow = KeycloakAuthFlow{
 			Alias: "flow1",

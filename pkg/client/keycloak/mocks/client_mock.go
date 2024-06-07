@@ -3384,7 +3384,7 @@ func (_c *MockClient_SetServiceAccountAttributes_Call) RunAndReturn(run func(str
 }
 
 // SyncAuthFlow provides a mock function with given fields: realmName, flow
-func (_m *MockClient) SyncAuthFlow(realmName string, flow *adapter.KeycloakAuthFlow) error {
+func (_m *MockClient) SyncAuthFlow(realmName string, flow *adapter.KeycloakAuthFlow) (string, error) {
 	ret := _m.Called(realmName, flow)
 
 	if len(ret) == 0 {
@@ -3398,7 +3398,7 @@ func (_m *MockClient) SyncAuthFlow(realmName string, flow *adapter.KeycloakAuthF
 		r0 = ret.Error(0)
 	}
 
-	return r0
+	return "", r0
 }
 
 // MockClient_SyncAuthFlow_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'SyncAuthFlow'
