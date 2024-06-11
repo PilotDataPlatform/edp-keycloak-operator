@@ -9,7 +9,6 @@ import (
 	"github.com/Nerzal/gocloak/v12"
 	pkgErrors "github.com/pkg/errors"
 	k8sErrors "k8s.io/apimachinery/pkg/api/errors"
-	"k8s.io/apimachinery/pkg/runtime"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/builder"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -21,6 +20,7 @@ import (
 	"github.com/epam/edp-keycloak-operator/controllers/helper"
 	"github.com/epam/edp-keycloak-operator/controllers/keycloakclient/chain"
 	"github.com/epam/edp-keycloak-operator/pkg/client/keycloak"
+	"github.com/epam/edp-keycloak-operator/pkg/objectmeta"
 )
 
 type Helper interface {
@@ -37,11 +37,10 @@ const (
 	clientAttributeLogoutRedirectUrisDefValue = "+"
 )
 
-func NewReconcileKeycloakClient(client client.Client, helper Helper, scheme *runtime.Scheme) *ReconcileKeycloakClient {
+func NewReconcileKeycloakClient(client client.Client, helper Helper) *ReconcileKeycloakClient {
 	return &ReconcileKeycloakClient{
 		client: client,
 		helper: helper,
-		chain:  chain.Make(scheme, client, ctrl.Log.WithName("chain").WithName("keycloak-client")),
 	}
 }
 
@@ -49,7 +48,6 @@ func NewReconcileKeycloakClient(client client.Client, helper Helper, scheme *run
 type ReconcileKeycloakClient struct {
 	client                  client.Client
 	helper                  Helper
-	chain                   chain.Element
 	successReconcileTimeout time.Duration
 }
 
@@ -82,9 +80,6 @@ func (r *ReconcileKeycloakClient) Reconcile(ctx context.Context, request reconci
 	var instance keycloakApi.KeycloakClient
 	if err := r.client.Get(ctx, request.NamespacedName, &instance); err != nil {
 		if k8sErrors.IsNotFound(err) {
-			// Request object not found, could have been deleted after reconcile request.
-			// Owned objects are automatically garbage collected. For additional cleanup logic use finalizers.
-			// Return and don't requeue
 			return
 		}
 
@@ -138,14 +133,14 @@ func (r *ReconcileKeycloakClient) tryReconcile(ctx context.Context, keycloakClie
 		return fmt.Errorf("unable to get keycloak realm: %w", err)
 	}
 
-	if err := r.chain.Serve(ctx, keycloakClient, kClient, realm); err != nil {
+	if err := chain.MakeChain(kClient, r.client).Serve(ctx, keycloakClient, realm); err != nil {
 		return fmt.Errorf("unable to serve keycloak client: %w", err)
 	}
 
 	if _, err := r.helper.TryToDelete(
 		ctx,
 		keycloakClient,
-		makeTerminator(keycloakClient.Status.ClientID, realm, kClient),
+		makeTerminator(keycloakClient.Status.ClientID, realm, kClient, objectmeta.PreserveResourcesOnDeletion(keycloakClient)),
 		keyCloakClientOperatorFinalizerName,
 	); err != nil {
 		return pkgErrors.Wrap(err, "unable to delete kc client")
@@ -178,6 +173,14 @@ func (r *ReconcileKeycloakClient) applyDefaults(ctx context.Context, keycloakCli
 			Kind: keycloakApi.KeycloakRealmKind,
 			Name: realmName,
 		}
+		updated = true
+	}
+
+	if keycloakClient.Spec.WebOrigins == nil {
+		keycloakClient.Spec.WebOrigins = []string{
+			keycloakClient.Spec.WebUrl,
+		}
+
 		updated = true
 	}
 

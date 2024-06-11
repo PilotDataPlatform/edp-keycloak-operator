@@ -13,13 +13,9 @@ type Keycloak struct {
 }
 
 type Realm struct {
-	Name                     string
-	Users                    []User
-	SsoRealmName             string
-	SsoRealmEnabled          bool
-	SsoAutoRedirectEnabled   bool
-	ID                       *string
-	DisableCentralIDPMappers bool
+	Name  string
+	Users []User
+	ID    *string
 }
 
 type User struct {
@@ -29,16 +25,24 @@ type User struct {
 
 func ConvertSpecToRole(roleInstance *keycloakApi.KeycloakRealmRole) *PrimaryRealmRole {
 	rr := PrimaryRealmRole{
-		Name:        roleInstance.Spec.Name,
-		Description: roleInstance.Spec.Description,
-		IsComposite: roleInstance.Spec.Composite,
-		Attributes:  roleInstance.Spec.Attributes,
-		Composites:  make([]string, 0, len(roleInstance.Spec.Composites)),
-		IsDefault:   roleInstance.Spec.IsDefault,
+		Name:                  roleInstance.Spec.Name,
+		Description:           roleInstance.Spec.Description,
+		IsComposite:           roleInstance.Spec.Composite,
+		Attributes:            roleInstance.Spec.Attributes,
+		Composites:            make([]string, 0, len(roleInstance.Spec.Composites)),
+		CompositesClientRoles: make(map[string][]string, len(roleInstance.Spec.CompositesClientRoles)),
+		IsDefault:             roleInstance.Spec.IsDefault,
 	}
 
 	for _, comp := range roleInstance.Spec.Composites {
 		rr.Composites = append(rr.Composites, comp.Name)
+	}
+
+	for k, v := range roleInstance.Spec.CompositesClientRoles {
+		rr.CompositesClientRoles[k] = make([]string, 0, len(v))
+		for _, comp := range v {
+			rr.CompositesClientRoles[k] = append(rr.CompositesClientRoles[k], comp.Name)
+		}
 	}
 
 	if roleInstance.Status.ID != "" {
@@ -55,24 +59,20 @@ func ConvertSpecToRealm(spec *keycloakApi.KeycloakRealmSpec) *Realm {
 	}
 
 	return &Realm{
-		Name:                     spec.RealmName,
-		Users:                    users,
-		SsoRealmName:             spec.SsoRealmName,
-		SsoRealmEnabled:          spec.SSOEnabled(),
-		SsoAutoRedirectEnabled:   spec.SSOAutoRedirectEnabled(),
-		ID:                       spec.ID,
-		DisableCentralIDPMappers: spec.DisableCentralIDPMappers,
+		Name:  spec.RealmName,
+		Users: users,
+		ID:    spec.ID,
 	}
 }
 
 type Client struct {
 	ID                                 string
+	AuthenticationFlowBindingOverrides map[string]string
 	ClientId                           string
 	ClientSecret                       string `json:"-"`
 	RealmName                          string
 	Roles                              []string
-	RealmRole                          IncludedRealmRole // what this for ? does not used anywhere
-	Public                             bool
+	PublicClient                       bool
 	DirectAccess                       bool
 	WebUrl                             string
 	Protocol                           string
@@ -81,17 +81,32 @@ type Client struct {
 	ServiceAccountEnabled              bool
 	FrontChannelLogout                 bool
 	RedirectUris                       []string
-	AuthenticationFlowBindingOverrides map[string]string
+	BaseUrl                            string
+	WebOrigins                         []string
+	AuthorizationServicesEnabled       bool
+	BearerOnly                         bool
+	ClientAuthenticatorType            string
+	ConsentRequired                    bool
+	Description                        string
+	Enabled                            bool
+	FullScopeAllowed                   bool
+	ImplicitFlowEnabled                bool
+	Name                               string
+	Origin                             string
+	RegistrationAccessToken            string
+	StandardFlowEnabled                bool
+	SurrogateAuthRequired              bool
 }
 
 type PrimaryRealmRole struct {
-	ID          *string
-	Name        string
-	Composites  []string
-	IsComposite bool
-	Description string
-	Attributes  map[string][]string
-	IsDefault   bool
+	ID                    *string
+	Name                  string
+	Composites            []string
+	CompositesClientRoles map[string][]string
+	IsComposite           bool
+	Description           string
+	Attributes            map[string][]string
+	IsDefault             bool
 }
 
 type IncludedRealmRole struct {
@@ -102,10 +117,11 @@ type IncludedRealmRole struct {
 func ConvertSpecToClient(spec *keycloakApi.KeycloakClientSpec, clientSecret, realmName string) *Client {
 	return &Client{
 		RealmName:                          realmName,
+		AuthenticationFlowBindingOverrides: spec.AuthenticationFlowBindingOverrides,
 		ClientId:                           spec.ClientId,
 		ClientSecret:                       clientSecret,
 		Roles:                              spec.ClientRoles,
-		Public:                             spec.Public,
+		PublicClient:                       spec.Public,
 		DirectAccess:                       spec.DirectAccess,
 		WebUrl:                             spec.WebUrl,
 		Protocol:                           getValueOrDefault(spec.Protocol),
@@ -114,7 +130,18 @@ func ConvertSpecToClient(spec *keycloakApi.KeycloakClientSpec, clientSecret, rea
 		ServiceAccountEnabled:              spec.ServiceAccount != nil && spec.ServiceAccount.Enabled,
 		FrontChannelLogout:                 spec.FrontChannelLogout,
 		RedirectUris:                       spec.RedirectUris,
-		AuthenticationFlowBindingOverrides: spec.AuthenticationFlowBindingOverrides,
+		WebOrigins:                         spec.WebOrigins,
+		ImplicitFlowEnabled:                spec.ImplicitFlowEnabled,
+		AuthorizationServicesEnabled:       spec.AuthorizationServicesEnabled,
+		BearerOnly:                         spec.BearerOnly,
+		ClientAuthenticatorType:            spec.ClientAuthenticatorType,
+		ConsentRequired:                    spec.ConsentRequired,
+		Description:                        spec.Description,
+		Enabled:                            spec.Enabled,
+		FullScopeAllowed:                   spec.FullScopeAllowed,
+		Name:                               spec.Name,
+		StandardFlowEnabled:                spec.StandardFlowEnabled,
+		SurrogateAuthRequired:              spec.SurrogateAuthRequired,
 	}
 }
 

@@ -21,29 +21,10 @@ type KeycloakRealmSpec struct {
 	// +optional
 	KeycloakRef common.KeycloakRef `json:"keycloakRef,omitempty"`
 
-	// SsoRealmName specifies the name of the SSO realm used by the realm.
-	// +optional
-	SsoRealmName string `json:"ssoRealmName,omitempty"`
-
-	// SsoRealmEnabled indicates whether to enable the SSO realm.
-	// +nullable
-	// +optional
-	SsoRealmEnabled *bool `json:"ssoRealmEnabled,omitempty"`
-
-	// SsoAutoRedirectEnabled indicates whether to enable automatic redirection to the SSO realm.
-	// +nullable
-	// +optional
-	SsoAutoRedirectEnabled *bool `json:"ssoAutoRedirectEnabled,omitempty"`
-
 	// Users is a list of users to create in the realm.
 	// +nullable
 	// +optional
 	Users []User `json:"users,omitempty"`
-
-	// SSORealmMappers is a list of SSO realm mappers to create in the realm.
-	// +nullable
-	// +optional
-	SSORealmMappers *[]SSORealmMapper `json:"ssoRealmMappers,omitempty"`
 
 	// BrowserFlow specifies the authentication flow to use for the realm's browser clients.
 	// +nullable
@@ -70,10 +51,6 @@ type KeycloakRealmSpec struct {
 	// +optional
 	RealmEventConfig *RealmEventConfig `json:"realmEventConfig,omitempty"`
 
-	// DisableCentralIDPMappers indicates whether to disable the default identity provider (IDP) mappers.
-	// +optional
-	DisableCentralIDPMappers bool `json:"disableCentralIDPMappers,omitempty"`
-
 	// PasswordPolicies is a list of password policies to apply to the realm.
 	// +nullable
 	// +optional
@@ -82,6 +59,11 @@ type KeycloakRealmSpec struct {
 	// FrontendURL Set the frontend URL for the realm. Use in combination with the default hostname provider to override the base URL for frontend requests for a specific realm.
 	// +optional
 	FrontendURL string `json:"frontendUrl,omitempty"`
+
+	// TokenSettings is the configuration for tokens in the realm.
+	// +nullable
+	// +optional
+	TokenSettings *common.TokenSettings `json:"tokenSettings,omitempty"`
 }
 
 type User struct {
@@ -154,14 +136,6 @@ type RealmThemes struct {
 	InternationalizationEnabled *bool `json:"internationalizationEnabled"`
 }
 
-func (in *KeycloakRealmSpec) SSOEnabled() bool {
-	return in.SsoRealmEnabled != nil && *in.SsoRealmEnabled
-}
-
-func (in *KeycloakRealmSpec) SSOAutoRedirectEnabled() bool {
-	return in.SsoAutoRedirectEnabled == nil || *in.SsoAutoRedirectEnabled
-}
-
 func (in *KeycloakRealm) GetKeycloakRef() common.KeycloakRef {
 	return in.Spec.KeycloakRef
 }
@@ -205,6 +179,7 @@ func (in *KeycloakRealm) SetFailureCount(count int64) {
 // +kubebuilder:subresource:status
 // +kubebuilder:storageversion
 // +kubebuilder:printcolumn:name="Available",type="boolean",JSONPath=".status.available",description="Is the resource available"
+// +kubebuilder:printcolumn:name="Status",type="string",JSONPath=".status.value",description="Reconcilation status"
 
 // KeycloakRealm is the Schema for the keycloak realms API.
 type KeycloakRealm struct {

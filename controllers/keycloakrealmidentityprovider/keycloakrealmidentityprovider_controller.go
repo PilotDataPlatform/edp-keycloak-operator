@@ -8,6 +8,7 @@ import (
 
 	"github.com/Nerzal/gocloak/v12"
 	"github.com/pkg/errors"
+	"golang.org/x/exp/maps"
 	k8sErrors "k8s.io/apimachinery/pkg/api/errors"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/builder"
@@ -21,6 +22,7 @@ import (
 	"github.com/epam/edp-keycloak-operator/controllers/helper"
 	"github.com/epam/edp-keycloak-operator/pkg/client/keycloak"
 	"github.com/epam/edp-keycloak-operator/pkg/client/keycloak/adapter"
+	"github.com/epam/edp-keycloak-operator/pkg/objectmeta"
 )
 
 const finalizerName = "keycloak.realmidp.operator.finalizer.name"
@@ -33,16 +35,22 @@ type Helper interface {
 	CreateKeycloakClientFromRealmRef(ctx context.Context, object helper.ObjectWithRealmRef) (keycloak.Client, error)
 }
 
+type RefClient interface {
+	MapConfigSecretsRefs(ctx context.Context, config map[string]string, namespace string) error
+}
+
 type Reconcile struct {
 	client                  client.Client
 	helper                  Helper
+	secretRefClient         RefClient
 	successReconcileTimeout time.Duration
 }
 
-func NewReconcile(client client.Client, helper Helper) *Reconcile {
+func NewReconcile(client client.Client, helper Helper, secretRefClient RefClient) *Reconcile {
 	return &Reconcile{
-		client: client,
-		helper: helper,
+		client:          client,
+		helper:          helper,
+		secretRefClient: secretRefClient,
 	}
 }
 
@@ -148,6 +156,10 @@ func (r *Reconcile) tryReconcile(ctx context.Context, keycloakRealmIDP *keycloak
 
 	keycloakIDP := createKeycloakIDPFromSpec(&keycloakRealmIDP.Spec)
 
+	if err = r.secretRefClient.MapConfigSecretsRefs(ctx, keycloakIDP.Config, keycloakRealmIDP.Namespace); err != nil {
+		return fmt.Errorf("unable to map config secrets: %w", err)
+	}
+
 	providerExists, err := kClient.IdentityProviderExists(ctx, gocloak.PString(realm.Realm), keycloakRealmIDP.Spec.Alias)
 	if err != nil {
 		return fmt.Errorf("failed to check if the identity provider exists: %w", err)
@@ -167,7 +179,12 @@ func (r *Reconcile) tryReconcile(ctx context.Context, keycloakRealmIDP *keycloak
 		return errors.Wrap(err, "unable to sync idp mappers")
 	}
 
-	term := makeTerminator(gocloak.PString(realm.Realm), keycloakRealmIDP.Spec.Alias, kClient)
+	term := makeTerminator(
+		gocloak.PString(realm.Realm),
+		keycloakRealmIDP.Spec.Alias,
+		kClient,
+		objectmeta.PreserveResourcesOnDeletion(keycloakRealmIDP),
+	)
 	if _, err := r.helper.TryToDelete(ctx, keycloakRealmIDP, term, finalizerName); err != nil {
 		return errors.Wrap(err, "unable to delete realm idp")
 	}
@@ -224,17 +241,21 @@ func syncIDPMappers(ctx context.Context, idpSpec *keycloakApi.KeycloakRealmIdent
 }
 
 func createKeycloakIDPMapperFromSpec(spec *keycloakApi.IdentityProviderMapper) *adapter.IdentityProviderMapper {
-	return &adapter.IdentityProviderMapper{
+	m := &adapter.IdentityProviderMapper{
 		IdentityProviderMapper: spec.IdentityProviderMapper,
 		Name:                   spec.Name,
-		Config:                 spec.Config,
+		Config:                 make(map[string]string, len(spec.Config)),
 		IdentityProviderAlias:  spec.IdentityProviderAlias,
 	}
+
+	maps.Copy(m.Config, spec.Config)
+
+	return m
 }
 
 func createKeycloakIDPFromSpec(spec *keycloakApi.KeycloakRealmIdentityProviderSpec) *adapter.IdentityProvider {
-	return &adapter.IdentityProvider{
-		Config:                    spec.Config,
+	p := &adapter.IdentityProvider{
+		Config:                    make(map[string]string, len(spec.Config)),
 		ProviderID:                spec.ProviderID,
 		Alias:                     spec.Alias,
 		Enabled:                   spec.Enabled,
@@ -246,4 +267,8 @@ func createKeycloakIDPFromSpec(spec *keycloakApi.KeycloakRealmIdentityProviderSp
 		StoreToken:                spec.StoreToken,
 		TrustEmail:                spec.TrustEmail,
 	}
+
+	maps.Copy(p.Config, spec.Config)
+
+	return p
 }

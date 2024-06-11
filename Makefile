@@ -3,8 +3,8 @@ CURRENT_DIR=$(shell pwd)
 DIST_DIR=${CURRENT_DIR}/dist
 BIN_NAME=manager
 
-HOST_OS:=$(shell go env GOOS)
-HOST_ARCH:=$(shell go env GOARCH)
+HOST_OS?=$(shell go env GOOS)
+HOST_ARCH?=$(shell go env GOARCH)
 
 VERSION?=$(shell git describe --tags)
 BUILD_DATE=$(shell date -u +'%Y-%m-%dT%H:%M:%SZ')
@@ -19,6 +19,8 @@ ENVTEST ?= $(LOCALBIN)/setup-envtest
 ENVTEST_K8S_VERSION = 1.23.5
 
 # Use kind cluster for testing
+CONTAINER_REGISTRY_URL?="repo"
+CONTAINER_REGISTRY_SPACE?="edp"
 START_KIND_CLUSTER?=true
 KIND_CLUSTER_NAME?="keycloak-operator"
 KUBE_VERSION?=1.26
@@ -42,7 +44,7 @@ endif
 override GCFLAGS +=all=-trimpath=${CURRENT_DIR}
 
 # Image URL to use all building/pushing image targets
-IMG ?= docker.io/epamedp/keycloak-operator:$(VERSION)
+IMG?=docker.io/epamedp/keycloak-operator:$(VERSION)
 
 # BUNDLE_GEN_FLAGS are the flags passed to the operator-sdk generate bundle command
 BUNDLE_GEN_FLAGS ?= -q --overwrite --version $(VERSION) $(BUNDLE_METADATA_OPTS)
@@ -78,7 +80,7 @@ manifests: controller-gen ## Generate WebhookConfiguration, ClusterRole and Cust
 	$(CONTROLLER_GEN) rbac:roleName=manager-role crd webhook paths="./..." output:crd:artifacts:config=config/crd/bases
 
 .PHONY: generate
-generate: controller-gen api-docs ## Generate code containing DeepCopy, DeepCopyInto, and DeepCopyObject method implementations.
+generate: controller-gen ## Generate code containing DeepCopy, DeepCopyInto, and DeepCopyObject method implementations.
 	$(CONTROLLER_GEN) object:headerFile="hack/boilerplate.go.txt" paths="./..."
 
 .PHONY: validate-docs
@@ -86,17 +88,17 @@ validate-docs: api-docs helm-docs  ## Validate helm and api docs
 	@git diff -s --exit-code deploy-templates/README.md || (echo "Run 'make helm-docs' to address the issue." && git diff && exit 1)
 	@git diff -s --exit-code docs/api.md || (echo " Run 'make api-docs' to address the issue." && git diff && exit 1)
 
-# Run tests //TODO: set TEST_KEYCLOAK_URL to run integration tests
+# Run tests
 test: fmt vet envtest
-	KUBEBUILDER_ASSETS="$(shell $(ENVTEST) use $(ENVTEST_K8S_VERSION) --bin-dir $(LOCALBIN) -p path)" \
+	KUBEBUILDER_ASSETS="$(shell $(ENVTEST) --arch=amd64 use $(ENVTEST_K8S_VERSION) --bin-dir $(LOCALBIN) -p path)" \
 	TEST_KEYCLOAK_URL=${TEST_KEYCLOAK_URL} \
 	go test ./... -coverprofile=coverage.out `go list ./...`
 
 ## Run e2e tests. Requires kind with running cluster and kuttl tool.
 e2e: build
-	docker build --no-cache -t ${E2E_IMAGE_REPOSITORY}:${E2E_IMAGE_TAG} .
-	kind load --name $(KIND_CLUSTER_NAME) docker-image ${E2E_IMAGE_REPOSITORY}:${E2E_IMAGE_TAG}
-	E2E_IMAGE_REPOSITORY=${E2E_IMAGE_REPOSITORY} E2E_IMAGE_TAG=${E2E_IMAGE_TAG} kubectl kuttl test
+	docker build --no-cache -t ${CONTAINER_REGISTRY_URL}/${CONTAINER_REGISTRY_SPACE}/${E2E_IMAGE_REPOSITORY}:${E2E_IMAGE_TAG} .
+	kind load --name $(KIND_CLUSTER_NAME) docker-image ${CONTAINER_REGISTRY_URL}/${CONTAINER_REGISTRY_SPACE}/${E2E_IMAGE_REPOSITORY}:${E2E_IMAGE_TAG}
+	E2E_IMAGE_REPOSITORY=${E2E_IMAGE_REPOSITORY} CONTAINER_REGISTRY_URL=${CONTAINER_REGISTRY_URL} CONTAINER_REGISTRY_SPACE=${CONTAINER_REGISTRY_SPACE} E2E_IMAGE_TAG=${E2E_IMAGE_TAG} kubectl-kuttl test
 
 .PHONY: fmt
 fmt:  ## Run go fmt
@@ -137,7 +139,7 @@ helm-docs: helmdocs	## generate helm docs
 GOLANGCILINT = ${CURRENT_DIR}/bin/golangci-lint
 .PHONY: golangci-lint
 golangci-lint: ## Download golangci-lint locally if necessary.
-	$(call go-get-tool,$(GOLANGCILINT),github.com/golangci/golangci-lint/cmd/golangci-lint,v1.52.0)
+	$(call go-get-tool,$(GOLANGCILINT),github.com/golangci/golangci-lint/cmd/golangci-lint,v1.55.2)
 
 .PHONY: install
 install: manifests kustomize ## Install CRDs into the K8s cluster specified in ~/.kube/config.
@@ -175,7 +177,7 @@ crdoc: ## Download crdoc locally if necessary.
 CONTROLLER_GEN = $(LOCALBIN)/controller-gen
 .PHONY: controller-gen
 controller-gen: ## Download controller-gen locally if necessary.
-	$(call go-get-tool,$(CONTROLLER_GEN),sigs.k8s.io/controller-tools/cmd/controller-gen,v0.11.3)
+	$(call go-get-tool,$(CONTROLLER_GEN),sigs.k8s.io/controller-tools/cmd/controller-gen,v0.15.0)
 # go-get-tool will 'go get' any package $2 and install it to $1.
 PROJECT_DIR := $(shell dirname $(abspath $(lastword $(MAKEFILE_LIST))))
 define go-get-tool
@@ -202,10 +204,18 @@ ENVTEST=$(LOCALBIN)/setup-envtest
 .PHONY: envtest
 envtest: $(ENVTEST) ## Download envtest-setup locally if necessary.
 $(ENVTEST): $(LOCALBIN)
-	$(call go-get-tool,$(ENVTEST),sigs.k8s.io/controller-runtime/tools/setup-envtest,latest)
+	$(call go-get-tool,$(ENVTEST),sigs.k8s.io/controller-runtime/tools/setup-envtest,release-0.16)
 
 .PHONY: start-kind
 start-kind:	## Start kind cluster
 ifeq (true,$(START_KIND_CLUSTER))
 	kind create cluster --name $(KIND_CLUSTER_NAME) --config $(KIND_CONFIG)
 endif
+
+mocks: mockery
+	$(MOCKERY)
+
+MOCKERY = $(LOCALBIN)/mockery
+.PHONY: mockery
+mockery: ## Download mockery locally if necessary.
+	$(call go-get-tool,$(MOCKERY),github.com/vektra/mockery/v2,v2.43.0)
